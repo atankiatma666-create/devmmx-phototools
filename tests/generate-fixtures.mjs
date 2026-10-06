@@ -62,6 +62,29 @@ async function draw(name, w, h, kind, type, quality) {
       for (let y = 0; y < h; y += 10) for (let x = w / 2; x < w; x += 10) {
         ctx.fillStyle = ((x + y) / 10) % 2 ? '#c0392b' : '#2c3e9b'; ctx.fillRect(x, y, 10, 10);
       }
+    } else if (kind === 'detailed') {
+      // Photo-like texture with several sizes of text, like a phone photo of a document or ID card
+      const g = ctx.createLinearGradient(0, 0, w, h);
+      g.addColorStop(0, '#c9d6c2'); g.addColorStop(1, '#8a9bb0');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      for (let i = 0; i < 1500; i++) {
+        ctx.strokeStyle = `hsla(${rnd() * 360},45%,${25 + rnd() * 50}%,0.5)`; ctx.lineWidth = 1 + rnd() * 3;
+        ctx.beginPath(); const x = rnd() * w, y = rnd() * h; ctx.moveTo(x, y); ctx.lineTo(x + (rnd() - 0.5) * 300, y + (rnd() - 0.5) * 300); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.fillRect(w * 0.08, h * 0.08, w * 0.84, h * 0.84);
+      ctx.fillStyle = '#1a1a1a';
+      let y = h * 0.08 + 90;
+      for (const size of [72, 48, 36, 28, 22, 18]) {
+        ctx.font = `${size}px sans-serif`;
+        for (let line = 0; line < 3; line++) {
+          ctx.fillText(`Size ${size}px: The quick brown fox jumps over the lazy dog 0123456789`, w * 0.1, y);
+          y += size * 1.5;
+        }
+        y += 30;
+      }
+      const img = ctx.getImageData(0, 0, w, h), d = img.data;
+      for (let i = 0; i < d.length; i += 4) { const n = (rnd() - 0.5) * 24; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+      ctx.putImageData(img, 0, 0);
     } else if (kind === 'small') {
       ctx.fillStyle = '#7aa'; ctx.fillRect(0, 0, w, h); ctx.fillStyle = '#245'; ctx.fillRect(w / 4, h / 4, w / 2, h / 2);
     }
@@ -75,8 +98,12 @@ async function draw(name, w, h, kind, type, quality) {
 const photo = await draw('photo.jpg', 3000, 2000, 'photo', 'image/jpeg', 0.95);
 await draw('photo.webp', 1600, 1200, 'photo', 'image/webp', 0.95);
 await draw('noisy.png', 2000, 1500, 'noise', 'image/png');
+// Detailed 4000 x 3000 photo of text (Stage 2A)
+await draw('detailed.jpg', 4000, 3000, 'detailed', 'image/jpeg', 0.92);
 // Very wide strip (finding 4): 12000 x 60 random noise
 await draw('wide-noise.png', 12000, 60, 'noise', 'image/png');
+// Strip already at the smallest allowed size (shortest side 30 px <= 32): cannot be made smaller (Stage 2A.1)
+await draw('strip-noise.png', 3000, 30, 'noise', 'image/png');
 await draw('transparent.png', 800, 600, 'transparent', 'image/png');
 await draw('small.jpg', 300, 200, 'small', 'image/jpeg', 0.8);
 // A real PNG with the wrong extension (should still be accepted: format is detected from the bytes)

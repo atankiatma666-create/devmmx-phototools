@@ -1,61 +1,84 @@
-# Test results — Stage 1.1 with fixes 1.1.1
+# Test results — Stage 2A with review corrections (2A.1)
 
-Executed on 6 October 2026 in a Linux container with Node.js 22.22.2, Playwright 1.56 and Chromium 141.0.7390.37 (headless).
+Executed on 6 October 2026 in a Linux container with Node.js 22.22.2, Playwright 1.56 and Chromium 141.0.7390.37 (headless). All images are synthetic fixtures from `tests/generate-fixtures.mjs`.
 
-## What changed in 1.1.1
+## 2A.1 corrections
 
-1. **Tests no longer depend on the repository holding placeholders.** `tests/template.mjs` copies `site/` and `tools/` into a temporary folder, without `site.config.json`. It then runs `config.mjs apply` there with no settings, which resets every marked field to its placeholder and regenerates `sitemap.xml` and `robots.txt`. It checks the result is a clean template. `config-tests.mjs` and `run-all.mjs` both start from this template. The owner's `site/` and `site.config.json` are fingerprinted before testing and checked after.
-2. **Markers are validated page by page.** About needs exactly 1 owner-name. Contact needs 1 owner-name, 1 email and 1 email-link. Privacy needs 1 email and 1 email-link. Every other page needs none. Malformed markers (the attribute present but not in the expected form) are also reported. `status` and `prepublish` fail and name the page. `set` and `apply` refuse before writing anything.
+1. **Result wording about the 70% setting.** The note is now chosen from what actually happened:
+   - **Shrunk, setting 70% or higher:** "To keep the setting at 70% or higher, the image was made smaller…"
+   - **Shrunk to the smallest allowed size, still below 70%:** "The image was made smaller, to N% of the original width…, which is the smallest size this tool allows… Even at that size it did not fit at a setting of 70%, so the setting had to go down to X%."
+   - **Resizing on, but already at the smallest size:** "This image is already at the smallest size this tool allows…, so it could not be made smaller, and the setting had to go down to X%."
+   - **Resizing off, below 70%:** turning resizing on "usually" keeps 70% or higher, followed by "That is not always possible…".
 
-## Both findings reproduced before the fixes
+   The checkbox hint, the page's quality section, the Android guide and the README no longer describe a universal 70% floor.
+2. **Preview limitation disclosed visibly.**
+   - When the original is larger than 1,600 px, its caption reads "Original, scaled preview: shown from a W × H px copy. Your file is …".
+   - A visible note says the preview is capped at 1,600 px to save memory and that deep zoom cannot show all original detail. It tells users to check the original file and the downloaded JPEG in their gallery or file viewer.
+   - When the original is no larger than 1,600 px, the caption says "(preview at full size)" and the note is hidden.
+   - The result caption now says it is "the downloaded JPEG itself".
+   - The memory cap is unchanged.
 
-Run on a copy of the Stage 1.1 code:
-- **Finding 1:** after `node tools/config.mjs set --domain myphoto.example.com --name Sem --email sem@example.com`, `node tests/config-tests.mjs` gave **11 passed, 2 failed**. The two failures were "Template copy: status consistent but incomplete, prepublish fails" and "Invalid inputs leave all files unchanged".
-- **Finding 2:** after replacing `<span data-config="owner-name">Sem</span>` with `<span>Old Owner</span>` in `site/contact/index.html`, `prepublish` printed "Ready to publish" and exited 0.
+Unchanged: the compression algorithm, configuration tools and workflows. The suite confirms identical output bytes to Stage 2A for detailed 200 KB with resizing on (196,930), detailed 200 KB with resizing off (200,565) and thin 12000×60 at 40 KB (40,905).
 
-After the fix, the same steps for finding 2 give `prepublish` exit 1, `status` exit 1, and `set --name Sem2` refused. The message is `contact/index.html: expected 1 "owner-name" marker, found 0 (missing)`. The file still contains "Old Owner" and `site.config.json` still says "Sem".
+Note: the working copy again held undelivered edits from an interrupted session. They were set aside; this release was rebuilt from the delivered Stage 2A ZIP.
 
-## State A: fresh ZIP extract (unconfigured)
+## Reproduction before the fix
 
-Commands, from the extracted `devmmx-phototools/` folder:
+The new suite was run against the unmodified delivered Stage 2A site:
+```
+SITE_DIR=<delivered Stage 2A>/site RESULTS_DIR=/tmp/old2a-results node tests/run-tests.mjs
+```
+Result: 44 passed, 7 failed.
+- The thin 12000×60 image at 40 KB with resizing on gave 6400×32, 40,905 bytes, **setting 45%** in Chromium. ChatGPT's native encoder gave about 33%; encoders differ.
+- Its note read: "…To keep the setting at 70% or higher, the image was made smaller: 53% of the original width… Even at the smallest size this tool allows, the setting had to go below 70%…". That is contradictory, and it is the reported bug.
+- The other failures were the new wording and preview checks: the resize-off recommendation, the strip case, and the full-size and scaled preview labels.
+
+After the fix, the same scenario's note reads: "The image was made smaller, to 53% of the original width (same shape), which is the smallest size this tool allows (32 px on the shortest side). Even at that size it did not fit at a setting of 70%, so the setting had to go down to 45%."
+
+## Commands and results
+
+State A, a fresh extract of the candidate ZIP (unconfigured):
 ```
 node tests/generate-fixtures.mjs
-node tools/config.mjs status      # "Consistent, but setup incomplete: domain, name, email not set."
+node tools/config.mjs status      # Consistent, but setup incomplete
 node tests/run-all.mjs            # exit 0
 ```
-Summary: configuration 29/29, template copy 40/40, configured copy 40/40. The owner's `site/` and `site.config.json` were unchanged by testing.
-
-## State B: same working repository, configured with real-looking values
-
-Commands, run in the same folder after state A:
+State B, the same folder configured:
 ```
 node tools/config.mjs set --domain myphoto.example.com --name Sem --email sem@example.com
-node tools/config.mjs prepublish  # "Ready to publish", exit 0
-node tests/config-tests.mjs       # exit 0, 29 passed (the exact command from finding 1)
+node tools/config.mjs prepublish  # Ready to publish
 node tests/run-all.mjs            # exit 0
 ```
-Summary: standalone configuration 29/29, then run-all with configuration 29/29, template copy 40/40 and configured copy 40/40. The template copy used the placeholders, not "Sem". The configured copy used the test settings `phototools-test.example.com` / "Test Owner & Co". A SHA-256 fingerprint of the owner's `site/` files plus `site.config.json` was identical before and after (`0bbed76d1f94a383…`). Afterwards `site.config.json` still held myphoto.example.com / Sem / sem@example.com, and `prepublish` still passed.
+The owner's `site/` plus `site.config.json` fingerprint was `a2707e55ecb941fe…` before and after state B. `run-all.mjs` also checks this in both states.
 
-## New configuration regressions (16, all in both states)
+| | Configuration | Browser, template copy | Browser, configured copy | Owner files unchanged |
+|---|---|---|---|---|
+| State A (fresh ZIP) | 29/29 | 51/51 | 51/51 | yes |
+| State B (configured repo) | 29/29 | 51/51 | 51/51 | yes |
 
-- The exact finding-2 reproduction (Contact owner marker replaced by plain text).
-- Removing each of the 6 required markers on its own: about/owner-name, contact/owner-name, contact/email, contact/email-link, privacy/email, privacy/email-link.
-- Duplicating each of those 6 markers.
-- A malformed marker (extra attribute) and a marker on an unexpected page.
-- Template built from a repository configured with real-looking values: correct placeholders, none of the owner's values, and that repository unchanged.
-- The owner's working files unchanged after the whole configuration suite.
+## New and changed tests in 2A.1 (51 browser tests; 49 from Stage 2A plus 2 new)
 
-For each structural case the test checks:
-- `status` and `prepublish` exit 1 and name the page and marker;
-- `apply` and `set` exit 1 with "Nothing was changed";
-- all files, including `site.config.json`, are byte-identical afterwards.
+- **Every success test:** if the shown setting is below 70%, the note must not contain "To keep the setting at 70% or higher". If it is 70% or more, the note must not say the setting "had to go down".
+- **Thin 12000×60 at 40 KB, resizing on (changed):**
+  - a setting below 70% is allowed only at the smallest size (6400×32);
+  - the note must say the image was made smaller to the smallest allowed size and name the actual setting ("had to go down to 45%").
+- **New: strip 3000×30 at 20 KB, resizing on.** The image is already at the smallest size. An independent Chromium measurement confirms full size at 70% is 51,397 bytes, over the limit. The result is 3000×30 at 23%. The note must say it "could not be made smaller" and must not claim resizing happened.
+- **Resize off, detailed (changed):** the recommendation must say "usually" and "That is not always possible".
+- **Resize on, detailed (changed):** must contain the exact "To keep the setting at 70% or higher, the image was made smaller" sentence.
+- **Previews at 360 px and 1280 px (changed):**
+  - they wait until both images are complete with `naturalWidth > 0` before measuring;
+  - the original preview must have loaded at 1600 px, and the result preview at the downloaded JPEG's width;
+  - the boxes must be equal;
+  - the captions must include "scaled preview", the preview size, the real file size, and "the downloaded JPEG itself";
+  - the limitation note must be visible.
+- **New: an original of 1600×1200** is labelled "(preview at full size)" with the note hidden.
 
 ## Reports, state A (verbatim)
 
 ### Configuration
 ```
 devMmX PhotoTools configuration tests
-Run at: 2026-10-06T11:06:37.723Z
+Run at: 2026-10-06T16:57:45.004Z
 Node.js v22.22.2
 
 PASS  Template copy: status consistent but incomplete, prepublish fails
@@ -94,61 +117,72 @@ PASS  Owner's working site/ and site.config.json are unchanged after all configu
 ### Browser, template copy
 ```
 devMmX PhotoTools browser test report (template copy)
-Site folder: /tmp/phototools-copies-TlW3YB/template/site
-Run at: 2026-10-06T11:07:29.300Z
+Site folder: /tmp/phototools-copies-jipedQ/template/site
+Run at: 2026-10-06T16:58:56.118Z
 Browser: Chromium 141.0.7390.37 (Playwright, headless, Linux)
 
-PASS  Success: 3000x2000 JPEG to 100 KB, quality only, dimensions unchanged  (1534 ms)
-PASS  Success: 1600x1200 WebP to 50 KB  (786 ms)
-PASS  Success: custom 75 KB limit  (1291 ms)
+PASS  Success: 3000x2000 JPEG to 100 KB, quality only, dimensions unchanged  (1497 ms)
+PASS  Success: 1600x1200 WebP to 50 KB  (937 ms)
+PASS  Success: custom 75 KB limit  (1569 ms)
 PASS  Success: PNG with .jpg extension is detected by content  (600 ms)
-PASS  Success with resize: noisy 2000x1500 PNG to 20 KB, smaller dims, same aspect ratio  (1076 ms)
-PASS  Transparency: notice shown and transparent area becomes white  (752 ms)
-PASS  Metadata: EXIF block in input is not present in output  (1214 ms)
-PASS  Impossible target: 20 KB on noisy PNG without resize gives error, no download  (874 ms)
-PASS  Already-small JPEG: note says it is already under the limit  (235 ms)
-PASS  Rejects random-bytes.jpg with a clear error  (352 ms)
-PASS  Rejects jpeg-garbage.jpg with a clear error  (265 ms)
-PASS  Rejects truncated.jpg with a clear error  (269 ms)
-PASS  Rejects text-renamed.png with a clear error  (292 ms)
-PASS  Rejects huge-dimensions.png with a clear error  (234 ms)
-PASS  Rejects bad-data.png with a clear error  (254 ms)
-PASS  Rejects animation.gif with a clear error  (237 ms)
-PASS  Rejects photo.heic with a clear error  (257 ms)
-PASS  Rejects empty.jpg with a clear error  (228 ms)
-PASS  Rejects oversized.jpg with a clear error  (224 ms)
-PASS  Custom limit validation  (526 ms)
-PASS  Reset clears image, result, download link and releases object URLs  (818 ms)
-PASS  Replacing the image during processing cancels the old run (no stale result or download)  (4751 ms)
-PASS  Choosing a new image after success removes the old download  (799 ms)
-PASS  No image data is transmitted (request log, server log, CSP blocks connections)  (1372 ms)
-PASS  Options are locked while compressing; picker and Start over stay usable  (1297 ms)
-PASS  Preset change during a slowed encode cancels the run; new run uses the new limit  (4040 ms)
-PASS  Custom-limit edit during a slowed encode cancels the run; new run uses the new limit  (3908 ms)
-PASS  Resize-option change during a slowed encode cancels the run  (3684 ms)
-PASS  Option changed without an event: finished result is discarded, not published  (982 ms)
-PASS  Start over during processing cancels cleanly  (3791 ms)
-PASS  Leaving mid-run (pagehide) and returning from back/forward cache (pageshow) gives a clean, usable tool  (4229 ms)
-PASS  Wide 12000x60 noisy PNG to 40 KB with resizing: succeeds within limits (finding 4)  (777 ms)
-PASS  Wide 12000x60 noisy PNG to 5 KB: honest "smallest allowed size" message with measured size  (626 ms)
-PASS  Screenshots: mobile compressor before and after a successful result  (1843 ms)
-PASS  Pages: status, unique titles/descriptions, one h1, canonical, internal links resolve  (903 ms)
-PASS  404: unknown path returns 404 page with noindex and working links  (141 ms)
-PASS  Layout at 360px: no horizontal scroll on any page, touch targets >= 44px  (2192 ms)
-PASS  Layout at 1280px: no horizontal scroll on any page  (2684 ms)
-PASS  Keyboard: skip link first, file picker reachable by Tab with visible focus  (257 ms)
-PASS  Without JavaScript: instructions readable, tool hidden, notice shown  (151 ms)
+PASS  Success with resize: noisy 2000x1500 PNG to 20 KB, smaller dims, same aspect ratio  (1132 ms)
+PASS  Transparency: notice shown and transparent area becomes white  (883 ms)
+PASS  Metadata: EXIF block in input is not present in output  (1288 ms)
+PASS  Impossible target: 20 KB on noisy PNG without resize gives error, no download  (961 ms)
+PASS  Already-small JPEG: note says it is already under the limit  (264 ms)
+PASS  Rejects random-bytes.jpg with a clear error  (230 ms)
+PASS  Rejects jpeg-garbage.jpg with a clear error  (221 ms)
+PASS  Rejects truncated.jpg with a clear error  (274 ms)
+PASS  Rejects text-renamed.png with a clear error  (227 ms)
+PASS  Rejects huge-dimensions.png with a clear error  (309 ms)
+PASS  Rejects bad-data.png with a clear error  (325 ms)
+PASS  Rejects animation.gif with a clear error  (194 ms)
+PASS  Rejects photo.heic with a clear error  (225 ms)
+PASS  Rejects empty.jpg with a clear error  (201 ms)
+PASS  Rejects oversized.jpg with a clear error  (210 ms)
+PASS  Custom limit validation  (636 ms)
+PASS  Reset clears image, result, download link and releases object URLs  (805 ms)
+PASS  Replacing the image during processing cancels the old run (no stale result or download)  (4852 ms)
+PASS  Choosing a new image after success removes the old download  (872 ms)
+PASS  No image data is transmitted (request log, server log, CSP blocks connections)  (1272 ms)
+PASS  Options are locked while compressing; picker and Start over stay usable  (1442 ms)
+PASS  Preset change during a slowed encode cancels the run; new run uses the new limit  (4015 ms)
+PASS  Custom-limit edit during a slowed encode cancels the run; new run uses the new limit  (4003 ms)
+PASS  Resize-option change during a slowed encode cancels the run  (3660 ms)
+PASS  Option changed without an event: finished result is discarded, not published  (1103 ms)
+PASS  Start over during processing cancels cleanly  (3764 ms)
+PASS  Leaving mid-run (pagehide) and returning from back/forward cache (pageshow) gives a clean, usable tool  (4549 ms)
+PASS  Wide 12000x60 noisy PNG to 40 KB with resizing: succeeds within limits (finding 4)  (826 ms)
+PASS  Wide 12000x60 noisy PNG to 5 KB: honest "smallest allowed size" message with measured size  (582 ms)
+PASS  Screenshots: mobile compressor before and after a successful result  (2617 ms)
+PASS  Resize OFF, detailed 4000x3000 to 200 KB: dimensions kept, low setting explained  (1961 ms)
+PASS  Resize ON, detailed 4000x3000 to 200 KB: smaller dimensions, setting at least 70%, full size at 70% measured too big  (3432 ms)
+PASS  Resize ON, 70% fits at full size: dimensions kept, setting between 70% and 92%  (1150 ms)
+PASS  Resize ON never enlarges: small 300x200 image keeps its size at 92%  (466 ms)
+PASS  Resize ON, thin 12000x60 image to 40 KB: 70%+ unless at the smallest allowed size  (834 ms)
+PASS  Impossible with resize OFF: detailed 4000x3000 to 100 KB gives an accurate error and no download  (1014 ms)
+PASS  Resize option switched OFF during a slowed resize-first run cancels it  (3843 ms)
+PASS  Resize ON, 3000x30 strip already at the smallest size: not resized, setting below 70% explained accurately  (672 ms)
+PASS  Preview of an original no larger than 1,600 px is labelled full size, without the scaled-preview note  (932 ms)
+PASS  Previews: original and result shown at the same size with real pixels and bytes (360px)  (1679 ms)
+PASS  Previews: original and result shown at the same size with real pixels and bytes (1280px)  (1809 ms)
+PASS  Pages: status, unique titles/descriptions, one h1, canonical, internal links resolve  (929 ms)
+PASS  404: unknown path returns 404 page with noindex and working links  (139 ms)
+PASS  Layout at 360px: no horizontal scroll on any page, touch targets >= 44px  (1945 ms)
+PASS  Layout at 1280px: no horizontal scroll on any page  (2452 ms)
+PASS  Keyboard: skip link first, file picker reachable by Tab with visible focus  (245 ms)
+PASS  Without JavaScript: instructions readable, tool hidden, notice shown  (174 ms)
 
-40 passed, 0 failed, 40 total
+51 passed, 0 failed, 51 total
 
 Details:
-  jpg100: photo.jpg -> 93398 bytes (limit 102400), 3000x2000
-  webp50: photo.webp -> 47483 bytes (limit 51200), 1600x1200
-  custom75: photo.jpg -> 74696 bytes (limit 76800), 3000x2000
-  pngnamedjpg: png-named-as.jpg -> 20144 bytes (limit 20480), 800x600
-  noise20resize: noisy.png -> 19450 bytes (limit 20480), 362x272
+  jpg100: photo.jpg -> 93398 bytes (limit 102400), 3000x2000, setting 12%
+  webp50: photo.webp -> 47483 bytes (limit 51200), 1600x1200, setting 14%
+  custom75: photo.jpg -> 74696 bytes (limit 76800), 3000x2000, setting 10%
+  pngnamedjpg: png-named-as.jpg -> 20144 bytes (limit 20480), 800x600, setting 19%
+  noise20resize: noisy.png -> 19248 bytes (limit 20480), 418x313, setting 71%
   transparent: 50739 bytes; sampled pixels [[255,255,255,255],[255,255,255,255]]
-  impossible: Could not get this image under 20 KB (20,480 bytes). No file was created.The smallest result was 248.3 KB (254,295 bytes) at 10% quality and the original 2,000 × 1,500 px.Lowering the quality alone wa [encodes: 2]
+  impossible: Could not get this image under 20 KB (20,480 bytes). No file was created.The smallest result was 248.3 KB (254,295 bytes) at an encoder setting of 10% and the original 2,000 × 1,500 px.Lowering the qu [encodes: 2]
   bad:random-bytes.jpg: Unsupported file: random-bytes.jpg.This file is not a JPEG, PNG or WebP image. Renaming a file (for example .pdf to .jpg) does not change its format.
   bad:jpeg-garbage.jpg: jpeg-garbage.jpg could not be read as an image.The file looks damaged, or it is not really the format its name suggests. Try the original photo again.
   bad:truncated.jpg: truncated.jpg could not be read as an image.The JPEG file is incomplete. It may have been cut off while downloading or copying. Try the original photo again.
@@ -160,72 +194,90 @@ Details:
   bad:empty.jpg: empty.jpg is empty (0 bytes). Choose another file.
   bad:oversized.jpg: oversized.jpg is 26,624.0 KB (27,262,976 bytes). The largest file this tool accepts is 25,600.0 KB (25 MB).
   replace: status after replace began with: "Image ready. Choose a size limit, then press Compress."; final download photo-under-50kb.jpg 47483 bytes
-  network: page requests: GET /compress-image-to-kb/, GET /assets/css/style.css, GET /assets/img/favicon.svg, GET /assets/js/compressor.js, GET blob:/8624dd93-a884-47eb-8b9a-ce83f68506d2, GET blob:/12357657-5b4b-42fa-b97e-6dda9b038589; requests during processing: 0 network (2 local blob: preview loads); server saw 4 GETs with empty bodies; fetch() blocked by CSP
+  network: page requests: GET /compress-image-to-kb/, GET /assets/css/style.css, GET /assets/img/favicon.svg, GET /assets/js/compressor.js, GET blob:/aacc0efc-31b7-4955-8f35-af4c8876a871, GET blob:/803b65e9-8fbc-42cb-accc-cc3a3e48a1ea; requests during processing: 0 network (2 local blob: preview loads); server saw 4 GETs with empty bodies; fetch() blocked by CSP
   presetChange: 200 KB run cancelled by switch to 50 KB; new download 47483 bytes
   customChange: 150 KB run cancelled by edit to 60 KB; new download 57907 bytes
-  wide40: wide-noise.png -> 40905 bytes (limit 40960), 6400x32
-  wide5: Could not get this image under 5 KB (5,120 bytes). No file was created.Even at the smallest size this tool allows, 6,400 × 32 px (shortest side 32 px), and 10% quality, the file was 7.10 KB (7,266 bytes). Choose a larger limit. [independent Chromium measurement: 7266 bytes; encodes 6]
+  wide40: wide-noise.png -> 40905 bytes (limit 40960), 6400x32, setting 45%
+  wide5: Could not get this image under 5 KB (5,120 bytes). No file was created.Even at the smallest size this tool allows, 6,400 × 32 px (shortest side 32 px), and an encoder setting of 10%, the file was 7.10 KB (7,266 bytes). Choose a la [independent Chromium measurement: 7266 bytes; encodes 5]
+  detailed200off: detailed.jpg -> 200565 bytes (limit 204800), 4000x3000, setting 15%
+  detailed200on: detailed.jpg -> 196930 bytes (limit 204800), 1836x1377, setting 71%; full size at 70% = 1447846 bytes (over limit); 5% larger (1928x1446) at 70% = 211610 bytes (over limit)
+  webp500on: photo.webp -> 503453 bytes (limit 512000), 1600x1200, setting 79%
+  wide40on: wide-noise.png -> 40905 bytes (limit 40960), 6400x32, setting 45% (at smallest allowed size) | note: "The image was made smaller, to 53% of the original width (same shape), which is the smallest size this tool allows (32 px on the shortest side). Even at that size it did not fit at a setting of 70%, so the setting had to go down to 45%."
+  strip20on: strip-noise.png -> 20142 bytes (limit 20480), 3000x30, setting 23%; full size at 70% = 51397 bytes (over limit)
+  previews360: boxes 260x195 and 260x195 css px; Result: the downloaded JPEG itself, 1,836 × 1,377 px, 192.3 KB (196,930 bytes), setting 71%.
+  previews1280: boxes 405x303 and 405x303 css px; Result: the downloaded JPEG itself, 1,836 × 1,377 px, 192.3 KB (196,930 bytes), setting 71%.
   pages: 7 pages, 7 unique internal links checked; origin https://YOUR-DOMAIN.example; owner "OWNER-NAME-PLACEHOLDER"; email CONTACT-EMAIL-PLACEHOLDER
 ```
 
 ### Browser, configured copy
 ```
 devMmX PhotoTools browser test report (configured copy)
-Site folder: /tmp/phototools-copies-TlW3YB/configured/site
-Run at: 2026-10-06T11:08:20.668Z
+Site folder: /tmp/phototools-copies-jipedQ/configured/site
+Run at: 2026-10-06T17:00:07.448Z
 Browser: Chromium 141.0.7390.37 (Playwright, headless, Linux)
 
-PASS  Success: 3000x2000 JPEG to 100 KB, quality only, dimensions unchanged  (1529 ms)
-PASS  Success: 1600x1200 WebP to 50 KB  (1013 ms)
-PASS  Success: custom 75 KB limit  (1418 ms)
-PASS  Success: PNG with .jpg extension is detected by content  (690 ms)
-PASS  Success with resize: noisy 2000x1500 PNG to 20 KB, smaller dims, same aspect ratio  (1227 ms)
-PASS  Transparency: notice shown and transparent area becomes white  (832 ms)
-PASS  Metadata: EXIF block in input is not present in output  (1296 ms)
-PASS  Impossible target: 20 KB on noisy PNG without resize gives error, no download  (815 ms)
-PASS  Already-small JPEG: note says it is already under the limit  (256 ms)
-PASS  Rejects random-bytes.jpg with a clear error  (249 ms)
-PASS  Rejects jpeg-garbage.jpg with a clear error  (246 ms)
-PASS  Rejects truncated.jpg with a clear error  (251 ms)
-PASS  Rejects text-renamed.png with a clear error  (288 ms)
-PASS  Rejects huge-dimensions.png with a clear error  (242 ms)
-PASS  Rejects bad-data.png with a clear error  (227 ms)
-PASS  Rejects animation.gif with a clear error  (213 ms)
-PASS  Rejects photo.heic with a clear error  (220 ms)
-PASS  Rejects empty.jpg with a clear error  (228 ms)
-PASS  Rejects oversized.jpg with a clear error  (223 ms)
-PASS  Custom limit validation  (555 ms)
-PASS  Reset clears image, result, download link and releases object URLs  (810 ms)
-PASS  Replacing the image during processing cancels the old run (no stale result or download)  (4669 ms)
-PASS  Choosing a new image after success removes the old download  (703 ms)
-PASS  No image data is transmitted (request log, server log, CSP blocks connections)  (1157 ms)
-PASS  Options are locked while compressing; picker and Start over stay usable  (1292 ms)
-PASS  Preset change during a slowed encode cancels the run; new run uses the new limit  (3818 ms)
-PASS  Custom-limit edit during a slowed encode cancels the run; new run uses the new limit  (3851 ms)
-PASS  Resize-option change during a slowed encode cancels the run  (3560 ms)
-PASS  Option changed without an event: finished result is discarded, not published  (1020 ms)
-PASS  Start over during processing cancels cleanly  (3892 ms)
-PASS  Leaving mid-run (pagehide) and returning from back/forward cache (pageshow) gives a clean, usable tool  (4310 ms)
-PASS  Wide 12000x60 noisy PNG to 40 KB with resizing: succeeds within limits (finding 4)  (868 ms)
-PASS  Wide 12000x60 noisy PNG to 5 KB: honest "smallest allowed size" message with measured size  (615 ms)
-PASS  Screenshots: mobile compressor before and after a successful result  (1925 ms)
-PASS  Pages: status, unique titles/descriptions, one h1, canonical, internal links resolve  (754 ms)
-PASS  404: unknown path returns 404 page with noindex and working links  (137 ms)
-PASS  Layout at 360px: no horizontal scroll on any page, touch targets >= 44px  (2113 ms)
-PASS  Layout at 1280px: no horizontal scroll on any page  (2470 ms)
-PASS  Keyboard: skip link first, file picker reachable by Tab with visible focus  (263 ms)
-PASS  Without JavaScript: instructions readable, tool hidden, notice shown  (165 ms)
+PASS  Success: 3000x2000 JPEG to 100 KB, quality only, dimensions unchanged  (1550 ms)
+PASS  Success: 1600x1200 WebP to 50 KB  (992 ms)
+PASS  Success: custom 75 KB limit  (1477 ms)
+PASS  Success: PNG with .jpg extension is detected by content  (580 ms)
+PASS  Success with resize: noisy 2000x1500 PNG to 20 KB, smaller dims, same aspect ratio  (1188 ms)
+PASS  Transparency: notice shown and transparent area becomes white  (848 ms)
+PASS  Metadata: EXIF block in input is not present in output  (1404 ms)
+PASS  Impossible target: 20 KB on noisy PNG without resize gives error, no download  (869 ms)
+PASS  Already-small JPEG: note says it is already under the limit  (273 ms)
+PASS  Rejects random-bytes.jpg with a clear error  (313 ms)
+PASS  Rejects jpeg-garbage.jpg with a clear error  (216 ms)
+PASS  Rejects truncated.jpg with a clear error  (214 ms)
+PASS  Rejects text-renamed.png with a clear error  (210 ms)
+PASS  Rejects huge-dimensions.png with a clear error  (276 ms)
+PASS  Rejects bad-data.png with a clear error  (284 ms)
+PASS  Rejects animation.gif with a clear error  (266 ms)
+PASS  Rejects photo.heic with a clear error  (265 ms)
+PASS  Rejects empty.jpg with a clear error  (204 ms)
+PASS  Rejects oversized.jpg with a clear error  (200 ms)
+PASS  Custom limit validation  (615 ms)
+PASS  Reset clears image, result, download link and releases object URLs  (873 ms)
+PASS  Replacing the image during processing cancels the old run (no stale result or download)  (4822 ms)
+PASS  Choosing a new image after success removes the old download  (915 ms)
+PASS  No image data is transmitted (request log, server log, CSP blocks connections)  (1324 ms)
+PASS  Options are locked while compressing; picker and Start over stay usable  (1363 ms)
+PASS  Preset change during a slowed encode cancels the run; new run uses the new limit  (3954 ms)
+PASS  Custom-limit edit during a slowed encode cancels the run; new run uses the new limit  (4045 ms)
+PASS  Resize-option change during a slowed encode cancels the run  (3700 ms)
+PASS  Option changed without an event: finished result is discarded, not published  (1097 ms)
+PASS  Start over during processing cancels cleanly  (3829 ms)
+PASS  Leaving mid-run (pagehide) and returning from back/forward cache (pageshow) gives a clean, usable tool  (4406 ms)
+PASS  Wide 12000x60 noisy PNG to 40 KB with resizing: succeeds within limits (finding 4)  (744 ms)
+PASS  Wide 12000x60 noisy PNG to 5 KB: honest "smallest allowed size" message with measured size  (589 ms)
+PASS  Screenshots: mobile compressor before and after a successful result  (2652 ms)
+PASS  Resize OFF, detailed 4000x3000 to 200 KB: dimensions kept, low setting explained  (2084 ms)
+PASS  Resize ON, detailed 4000x3000 to 200 KB: smaller dimensions, setting at least 70%, full size at 70% measured too big  (3613 ms)
+PASS  Resize ON, 70% fits at full size: dimensions kept, setting between 70% and 92%  (1101 ms)
+PASS  Resize ON never enlarges: small 300x200 image keeps its size at 92%  (449 ms)
+PASS  Resize ON, thin 12000x60 image to 40 KB: 70%+ unless at the smallest allowed size  (951 ms)
+PASS  Impossible with resize OFF: detailed 4000x3000 to 100 KB gives an accurate error and no download  (1043 ms)
+PASS  Resize option switched OFF during a slowed resize-first run cancels it  (3845 ms)
+PASS  Resize ON, 3000x30 strip already at the smallest size: not resized, setting below 70% explained accurately  (700 ms)
+PASS  Preview of an original no larger than 1,600 px is labelled full size, without the scaled-preview note  (1021 ms)
+PASS  Previews: original and result shown at the same size with real pixels and bytes (360px)  (1746 ms)
+PASS  Previews: original and result shown at the same size with real pixels and bytes (1280px)  (1602 ms)
+PASS  Pages: status, unique titles/descriptions, one h1, canonical, internal links resolve  (732 ms)
+PASS  404: unknown path returns 404 page with noindex and working links  (167 ms)
+PASS  Layout at 360px: no horizontal scroll on any page, touch targets >= 44px  (2056 ms)
+PASS  Layout at 1280px: no horizontal scroll on any page  (2347 ms)
+PASS  Keyboard: skip link first, file picker reachable by Tab with visible focus  (269 ms)
+PASS  Without JavaScript: instructions readable, tool hidden, notice shown  (155 ms)
 
-40 passed, 0 failed, 40 total
+51 passed, 0 failed, 51 total
 
 Details:
-  jpg100: photo.jpg -> 93398 bytes (limit 102400), 3000x2000
-  webp50: photo.webp -> 47483 bytes (limit 51200), 1600x1200
-  custom75: photo.jpg -> 74696 bytes (limit 76800), 3000x2000
-  pngnamedjpg: png-named-as.jpg -> 20144 bytes (limit 20480), 800x600
-  noise20resize: noisy.png -> 19450 bytes (limit 20480), 362x272
+  jpg100: photo.jpg -> 93398 bytes (limit 102400), 3000x2000, setting 12%
+  webp50: photo.webp -> 47483 bytes (limit 51200), 1600x1200, setting 14%
+  custom75: photo.jpg -> 74696 bytes (limit 76800), 3000x2000, setting 10%
+  pngnamedjpg: png-named-as.jpg -> 20144 bytes (limit 20480), 800x600, setting 19%
+  noise20resize: noisy.png -> 19248 bytes (limit 20480), 418x313, setting 71%
   transparent: 50739 bytes; sampled pixels [[255,255,255,255],[255,255,255,255]]
-  impossible: Could not get this image under 20 KB (20,480 bytes). No file was created.The smallest result was 248.3 KB (254,295 bytes) at 10% quality and the original 2,000 × 1,500 px.Lowering the quality alone wa [encodes: 2]
+  impossible: Could not get this image under 20 KB (20,480 bytes). No file was created.The smallest result was 248.3 KB (254,295 bytes) at an encoder setting of 10% and the original 2,000 × 1,500 px.Lowering the qu [encodes: 2]
   bad:random-bytes.jpg: Unsupported file: random-bytes.jpg.This file is not a JPEG, PNG or WebP image. Renaming a file (for example .pdf to .jpg) does not change its format.
   bad:jpeg-garbage.jpg: jpeg-garbage.jpg could not be read as an image.The file looks damaged, or it is not really the format its name suggests. Try the original photo again.
   bad:truncated.jpg: truncated.jpg could not be read as an image.The JPEG file is incomplete. It may have been cut off while downloading or copying. Try the original photo again.
@@ -237,20 +289,27 @@ Details:
   bad:empty.jpg: empty.jpg is empty (0 bytes). Choose another file.
   bad:oversized.jpg: oversized.jpg is 26,624.0 KB (27,262,976 bytes). The largest file this tool accepts is 25,600.0 KB (25 MB).
   replace: status after replace began with: "Image ready. Choose a size limit, then press Compress."; final download photo-under-50kb.jpg 47483 bytes
-  network: page requests: GET /compress-image-to-kb/, GET /assets/css/style.css, GET /assets/img/favicon.svg, GET /assets/js/compressor.js, GET blob:/6d976bf6-8c0d-4231-9660-4f298cf3927b, GET blob:/9338dc1f-1cc8-46cb-85f8-2fcc300b5d16; requests during processing: 0 network (2 local blob: preview loads); server saw 4 GETs with empty bodies; fetch() blocked by CSP
+  network: page requests: GET /compress-image-to-kb/, GET /assets/css/style.css, GET /assets/img/favicon.svg, GET /assets/js/compressor.js, GET blob:/75500acc-0105-4971-807b-0e0016dd8c5e, GET blob:/19810df8-4203-4abc-85c8-ffa7ddfae048; requests during processing: 0 network (2 local blob: preview loads); server saw 4 GETs with empty bodies; fetch() blocked by CSP
   presetChange: 200 KB run cancelled by switch to 50 KB; new download 47483 bytes
   customChange: 150 KB run cancelled by edit to 60 KB; new download 57907 bytes
-  wide40: wide-noise.png -> 40905 bytes (limit 40960), 6400x32
-  wide5: Could not get this image under 5 KB (5,120 bytes). No file was created.Even at the smallest size this tool allows, 6,400 × 32 px (shortest side 32 px), and 10% quality, the file was 7.10 KB (7,266 bytes). Choose a larger limit. [independent Chromium measurement: 7266 bytes; encodes 6]
+  wide40: wide-noise.png -> 40905 bytes (limit 40960), 6400x32, setting 45%
+  wide5: Could not get this image under 5 KB (5,120 bytes). No file was created.Even at the smallest size this tool allows, 6,400 × 32 px (shortest side 32 px), and an encoder setting of 10%, the file was 7.10 KB (7,266 bytes). Choose a la [independent Chromium measurement: 7266 bytes; encodes 5]
+  detailed200off: detailed.jpg -> 200565 bytes (limit 204800), 4000x3000, setting 15%
+  detailed200on: detailed.jpg -> 196930 bytes (limit 204800), 1836x1377, setting 71%; full size at 70% = 1447846 bytes (over limit); 5% larger (1928x1446) at 70% = 211610 bytes (over limit)
+  webp500on: photo.webp -> 503453 bytes (limit 512000), 1600x1200, setting 79%
+  wide40on: wide-noise.png -> 40905 bytes (limit 40960), 6400x32, setting 45% (at smallest allowed size) | note: "The image was made smaller, to 53% of the original width (same shape), which is the smallest size this tool allows (32 px on the shortest side). Even at that size it did not fit at a setting of 70%, so the setting had to go down to 45%."
+  strip20on: strip-noise.png -> 20142 bytes (limit 20480), 3000x30, setting 23%; full size at 70% = 51397 bytes (over limit)
+  previews360: boxes 260x195 and 260x195 css px; Result: the downloaded JPEG itself, 1,836 × 1,377 px, 192.3 KB (196,930 bytes), setting 71%.
+  previews1280: boxes 405x303 and 405x303 css px; Result: the downloaded JPEG itself, 1,836 × 1,377 px, 192.3 KB (196,930 bytes), setting 71%.
   pages: 7 pages, 7 unique internal links checked; origin https://phototools-test.example.com; owner "Test Owner & Co"; email owner@phototools-test.example.com
 ```
 
-## Reports, state B (verbatim, from run-all)
+## Reports, state B (verbatim)
 
 ### Configuration
 ```
 devMmX PhotoTools configuration tests
-Run at: 2026-10-06T11:08:54.533Z
+Run at: 2026-10-06T17:00:16.193Z
 Node.js v22.22.2
 
 PASS  Template copy: status consistent but incomplete, prepublish fails
@@ -289,61 +348,72 @@ PASS  Owner's working site/ and site.config.json are unchanged after all configu
 ### Browser, template copy
 ```
 devMmX PhotoTools browser test report (template copy)
-Site folder: /tmp/phototools-copies-Nqrvtt/template/site
-Run at: 2026-10-06T11:09:45.004Z
+Site folder: /tmp/phototools-copies-juNNJR/template/site
+Run at: 2026-10-06T17:01:25.805Z
 Browser: Chromium 141.0.7390.37 (Playwright, headless, Linux)
 
-PASS  Success: 3000x2000 JPEG to 100 KB, quality only, dimensions unchanged  (1480 ms)
-PASS  Success: 1600x1200 WebP to 50 KB  (824 ms)
-PASS  Success: custom 75 KB limit  (2027 ms)
-PASS  Success: PNG with .jpg extension is detected by content  (615 ms)
-PASS  Success with resize: noisy 2000x1500 PNG to 20 KB, smaller dims, same aspect ratio  (1110 ms)
-PASS  Transparency: notice shown and transparent area becomes white  (808 ms)
-PASS  Metadata: EXIF block in input is not present in output  (1380 ms)
-PASS  Impossible target: 20 KB on noisy PNG without resize gives error, no download  (830 ms)
-PASS  Already-small JPEG: note says it is already under the limit  (236 ms)
-PASS  Rejects random-bytes.jpg with a clear error  (212 ms)
-PASS  Rejects jpeg-garbage.jpg with a clear error  (212 ms)
-PASS  Rejects truncated.jpg with a clear error  (244 ms)
-PASS  Rejects text-renamed.png with a clear error  (223 ms)
-PASS  Rejects huge-dimensions.png with a clear error  (257 ms)
-PASS  Rejects bad-data.png with a clear error  (252 ms)
-PASS  Rejects animation.gif with a clear error  (245 ms)
-PASS  Rejects photo.heic with a clear error  (233 ms)
-PASS  Rejects empty.jpg with a clear error  (233 ms)
-PASS  Rejects oversized.jpg with a clear error  (204 ms)
-PASS  Custom limit validation  (500 ms)
-PASS  Reset clears image, result, download link and releases object URLs  (695 ms)
-PASS  Replacing the image during processing cancels the old run (no stale result or download)  (4596 ms)
-PASS  Choosing a new image after success removes the old download  (792 ms)
-PASS  No image data is transmitted (request log, server log, CSP blocks connections)  (1215 ms)
-PASS  Options are locked while compressing; picker and Start over stay usable  (1214 ms)
-PASS  Preset change during a slowed encode cancels the run; new run uses the new limit  (3873 ms)
-PASS  Custom-limit edit during a slowed encode cancels the run; new run uses the new limit  (3841 ms)
-PASS  Resize-option change during a slowed encode cancels the run  (3556 ms)
-PASS  Option changed without an event: finished result is discarded, not published  (945 ms)
-PASS  Start over during processing cancels cleanly  (3609 ms)
-PASS  Leaving mid-run (pagehide) and returning from back/forward cache (pageshow) gives a clean, usable tool  (4110 ms)
-PASS  Wide 12000x60 noisy PNG to 40 KB with resizing: succeeds within limits (finding 4)  (794 ms)
-PASS  Wide 12000x60 noisy PNG to 5 KB: honest "smallest allowed size" message with measured size  (594 ms)
-PASS  Screenshots: mobile compressor before and after a successful result  (1721 ms)
-PASS  Pages: status, unique titles/descriptions, one h1, canonical, internal links resolve  (840 ms)
-PASS  404: unknown path returns 404 page with noindex and working links  (149 ms)
-PASS  Layout at 360px: no horizontal scroll on any page, touch targets >= 44px  (2178 ms)
-PASS  Layout at 1280px: no horizontal scroll on any page  (2521 ms)
-PASS  Keyboard: skip link first, file picker reachable by Tab with visible focus  (231 ms)
-PASS  Without JavaScript: instructions readable, tool hidden, notice shown  (126 ms)
+PASS  Success: 3000x2000 JPEG to 100 KB, quality only, dimensions unchanged  (1461 ms)
+PASS  Success: 1600x1200 WebP to 50 KB  (941 ms)
+PASS  Success: custom 75 KB limit  (1253 ms)
+PASS  Success: PNG with .jpg extension is detected by content  (580 ms)
+PASS  Success with resize: noisy 2000x1500 PNG to 20 KB, smaller dims, same aspect ratio  (1180 ms)
+PASS  Transparency: notice shown and transparent area becomes white  (809 ms)
+PASS  Metadata: EXIF block in input is not present in output  (1300 ms)
+PASS  Impossible target: 20 KB on noisy PNG without resize gives error, no download  (794 ms)
+PASS  Already-small JPEG: note says it is already under the limit  (216 ms)
+PASS  Rejects random-bytes.jpg with a clear error  (206 ms)
+PASS  Rejects jpeg-garbage.jpg with a clear error  (209 ms)
+PASS  Rejects truncated.jpg with a clear error  (208 ms)
+PASS  Rejects text-renamed.png with a clear error  (226 ms)
+PASS  Rejects huge-dimensions.png with a clear error  (247 ms)
+PASS  Rejects bad-data.png with a clear error  (224 ms)
+PASS  Rejects animation.gif with a clear error  (231 ms)
+PASS  Rejects photo.heic with a clear error  (219 ms)
+PASS  Rejects empty.jpg with a clear error  (226 ms)
+PASS  Rejects oversized.jpg with a clear error  (203 ms)
+PASS  Custom limit validation  (648 ms)
+PASS  Reset clears image, result, download link and releases object URLs  (849 ms)
+PASS  Replacing the image during processing cancels the old run (no stale result or download)  (4917 ms)
+PASS  Choosing a new image after success removes the old download  (997 ms)
+PASS  No image data is transmitted (request log, server log, CSP blocks connections)  (1293 ms)
+PASS  Options are locked while compressing; picker and Start over stay usable  (1430 ms)
+PASS  Preset change during a slowed encode cancels the run; new run uses the new limit  (3950 ms)
+PASS  Custom-limit edit during a slowed encode cancels the run; new run uses the new limit  (3966 ms)
+PASS  Resize-option change during a slowed encode cancels the run  (3635 ms)
+PASS  Option changed without an event: finished result is discarded, not published  (1012 ms)
+PASS  Start over during processing cancels cleanly  (3808 ms)
+PASS  Leaving mid-run (pagehide) and returning from back/forward cache (pageshow) gives a clean, usable tool  (4340 ms)
+PASS  Wide 12000x60 noisy PNG to 40 KB with resizing: succeeds within limits (finding 4)  (726 ms)
+PASS  Wide 12000x60 noisy PNG to 5 KB: honest "smallest allowed size" message with measured size  (598 ms)
+PASS  Screenshots: mobile compressor before and after a successful result  (2434 ms)
+PASS  Resize OFF, detailed 4000x3000 to 200 KB: dimensions kept, low setting explained  (2006 ms)
+PASS  Resize ON, detailed 4000x3000 to 200 KB: smaller dimensions, setting at least 70%, full size at 70% measured too big  (3529 ms)
+PASS  Resize ON, 70% fits at full size: dimensions kept, setting between 70% and 92%  (1102 ms)
+PASS  Resize ON never enlarges: small 300x200 image keeps its size at 92%  (430 ms)
+PASS  Resize ON, thin 12000x60 image to 40 KB: 70%+ unless at the smallest allowed size  (796 ms)
+PASS  Impossible with resize OFF: detailed 4000x3000 to 100 KB gives an accurate error and no download  (1107 ms)
+PASS  Resize option switched OFF during a slowed resize-first run cancels it  (3818 ms)
+PASS  Resize ON, 3000x30 strip already at the smallest size: not resized, setting below 70% explained accurately  (783 ms)
+PASS  Preview of an original no larger than 1,600 px is labelled full size, without the scaled-preview note  (921 ms)
+PASS  Previews: original and result shown at the same size with real pixels and bytes (360px)  (1637 ms)
+PASS  Previews: original and result shown at the same size with real pixels and bytes (1280px)  (1738 ms)
+PASS  Pages: status, unique titles/descriptions, one h1, canonical, internal links resolve  (739 ms)
+PASS  404: unknown path returns 404 page with noindex and working links  (146 ms)
+PASS  Layout at 360px: no horizontal scroll on any page, touch targets >= 44px  (1964 ms)
+PASS  Layout at 1280px: no horizontal scroll on any page  (2352 ms)
+PASS  Keyboard: skip link first, file picker reachable by Tab with visible focus  (217 ms)
+PASS  Without JavaScript: instructions readable, tool hidden, notice shown  (141 ms)
 
-40 passed, 0 failed, 40 total
+51 passed, 0 failed, 51 total
 
 Details:
-  jpg100: photo.jpg -> 93398 bytes (limit 102400), 3000x2000
-  webp50: photo.webp -> 47483 bytes (limit 51200), 1600x1200
-  custom75: photo.jpg -> 74696 bytes (limit 76800), 3000x2000
-  pngnamedjpg: png-named-as.jpg -> 20144 bytes (limit 20480), 800x600
-  noise20resize: noisy.png -> 19450 bytes (limit 20480), 362x272
+  jpg100: photo.jpg -> 93398 bytes (limit 102400), 3000x2000, setting 12%
+  webp50: photo.webp -> 47483 bytes (limit 51200), 1600x1200, setting 14%
+  custom75: photo.jpg -> 74696 bytes (limit 76800), 3000x2000, setting 10%
+  pngnamedjpg: png-named-as.jpg -> 20144 bytes (limit 20480), 800x600, setting 19%
+  noise20resize: noisy.png -> 19248 bytes (limit 20480), 418x313, setting 71%
   transparent: 50739 bytes; sampled pixels [[255,255,255,255],[255,255,255,255]]
-  impossible: Could not get this image under 20 KB (20,480 bytes). No file was created.The smallest result was 248.3 KB (254,295 bytes) at 10% quality and the original 2,000 × 1,500 px.Lowering the quality alone wa [encodes: 2]
+  impossible: Could not get this image under 20 KB (20,480 bytes). No file was created.The smallest result was 248.3 KB (254,295 bytes) at an encoder setting of 10% and the original 2,000 × 1,500 px.Lowering the qu [encodes: 2]
   bad:random-bytes.jpg: Unsupported file: random-bytes.jpg.This file is not a JPEG, PNG or WebP image. Renaming a file (for example .pdf to .jpg) does not change its format.
   bad:jpeg-garbage.jpg: jpeg-garbage.jpg could not be read as an image.The file looks damaged, or it is not really the format its name suggests. Try the original photo again.
   bad:truncated.jpg: truncated.jpg could not be read as an image.The JPEG file is incomplete. It may have been cut off while downloading or copying. Try the original photo again.
@@ -355,72 +425,90 @@ Details:
   bad:empty.jpg: empty.jpg is empty (0 bytes). Choose another file.
   bad:oversized.jpg: oversized.jpg is 26,624.0 KB (27,262,976 bytes). The largest file this tool accepts is 25,600.0 KB (25 MB).
   replace: status after replace began with: "Image ready. Choose a size limit, then press Compress."; final download photo-under-50kb.jpg 47483 bytes
-  network: page requests: GET /compress-image-to-kb/, GET /assets/css/style.css, GET /assets/img/favicon.svg, GET /assets/js/compressor.js, GET blob:/29eb5c80-f88f-4862-9092-ada0439969ad, GET blob:/cbf60c40-823a-4dd2-b270-04e7c66b9ae4; requests during processing: 0 network (2 local blob: preview loads); server saw 4 GETs with empty bodies; fetch() blocked by CSP
+  network: page requests: GET /compress-image-to-kb/, GET /assets/css/style.css, GET /assets/img/favicon.svg, GET /assets/js/compressor.js, GET blob:/9ff857bf-45d0-455b-82b7-68c06835dc05, GET blob:/e3c0d49d-c52e-45b6-ace6-5be9cdaba766; requests during processing: 0 network (2 local blob: preview loads); server saw 4 GETs with empty bodies; fetch() blocked by CSP
   presetChange: 200 KB run cancelled by switch to 50 KB; new download 47483 bytes
   customChange: 150 KB run cancelled by edit to 60 KB; new download 57907 bytes
-  wide40: wide-noise.png -> 40905 bytes (limit 40960), 6400x32
-  wide5: Could not get this image under 5 KB (5,120 bytes). No file was created.Even at the smallest size this tool allows, 6,400 × 32 px (shortest side 32 px), and 10% quality, the file was 7.10 KB (7,266 bytes). Choose a larger limit. [independent Chromium measurement: 7266 bytes; encodes 6]
+  wide40: wide-noise.png -> 40905 bytes (limit 40960), 6400x32, setting 45%
+  wide5: Could not get this image under 5 KB (5,120 bytes). No file was created.Even at the smallest size this tool allows, 6,400 × 32 px (shortest side 32 px), and an encoder setting of 10%, the file was 7.10 KB (7,266 bytes). Choose a la [independent Chromium measurement: 7266 bytes; encodes 5]
+  detailed200off: detailed.jpg -> 200565 bytes (limit 204800), 4000x3000, setting 15%
+  detailed200on: detailed.jpg -> 196930 bytes (limit 204800), 1836x1377, setting 71%; full size at 70% = 1447846 bytes (over limit); 5% larger (1928x1446) at 70% = 211610 bytes (over limit)
+  webp500on: photo.webp -> 503453 bytes (limit 512000), 1600x1200, setting 79%
+  wide40on: wide-noise.png -> 40905 bytes (limit 40960), 6400x32, setting 45% (at smallest allowed size) | note: "The image was made smaller, to 53% of the original width (same shape), which is the smallest size this tool allows (32 px on the shortest side). Even at that size it did not fit at a setting of 70%, so the setting had to go down to 45%."
+  strip20on: strip-noise.png -> 20142 bytes (limit 20480), 3000x30, setting 23%; full size at 70% = 51397 bytes (over limit)
+  previews360: boxes 260x195 and 260x195 css px; Result: the downloaded JPEG itself, 1,836 × 1,377 px, 192.3 KB (196,930 bytes), setting 71%.
+  previews1280: boxes 405x303 and 405x303 css px; Result: the downloaded JPEG itself, 1,836 × 1,377 px, 192.3 KB (196,930 bytes), setting 71%.
   pages: 7 pages, 7 unique internal links checked; origin https://YOUR-DOMAIN.example; owner "OWNER-NAME-PLACEHOLDER"; email CONTACT-EMAIL-PLACEHOLDER
 ```
 
 ### Browser, configured copy
 ```
 devMmX PhotoTools browser test report (configured copy)
-Site folder: /tmp/phototools-copies-Nqrvtt/configured/site
-Run at: 2026-10-06T11:10:36.923Z
+Site folder: /tmp/phototools-copies-juNNJR/configured/site
+Run at: 2026-10-06T17:02:36.189Z
 Browser: Chromium 141.0.7390.37 (Playwright, headless, Linux)
 
-PASS  Success: 3000x2000 JPEG to 100 KB, quality only, dimensions unchanged  (1543 ms)
-PASS  Success: 1600x1200 WebP to 50 KB  (921 ms)
-PASS  Success: custom 75 KB limit  (1363 ms)
-PASS  Success: PNG with .jpg extension is detected by content  (664 ms)
-PASS  Success with resize: noisy 2000x1500 PNG to 20 KB, smaller dims, same aspect ratio  (1123 ms)
-PASS  Transparency: notice shown and transparent area becomes white  (752 ms)
-PASS  Metadata: EXIF block in input is not present in output  (1285 ms)
-PASS  Impossible target: 20 KB on noisy PNG without resize gives error, no download  (739 ms)
-PASS  Already-small JPEG: note says it is already under the limit  (309 ms)
-PASS  Rejects random-bytes.jpg with a clear error  (230 ms)
-PASS  Rejects jpeg-garbage.jpg with a clear error  (268 ms)
-PASS  Rejects truncated.jpg with a clear error  (257 ms)
-PASS  Rejects text-renamed.png with a clear error  (298 ms)
-PASS  Rejects huge-dimensions.png with a clear error  (286 ms)
-PASS  Rejects bad-data.png with a clear error  (272 ms)
-PASS  Rejects animation.gif with a clear error  (218 ms)
-PASS  Rejects photo.heic with a clear error  (231 ms)
-PASS  Rejects empty.jpg with a clear error  (298 ms)
-PASS  Rejects oversized.jpg with a clear error  (228 ms)
-PASS  Custom limit validation  (560 ms)
-PASS  Reset clears image, result, download link and releases object URLs  (916 ms)
-PASS  Replacing the image during processing cancels the old run (no stale result or download)  (4758 ms)
-PASS  Choosing a new image after success removes the old download  (811 ms)
-PASS  No image data is transmitted (request log, server log, CSP blocks connections)  (1188 ms)
-PASS  Options are locked while compressing; picker and Start over stay usable  (1261 ms)
-PASS  Preset change during a slowed encode cancels the run; new run uses the new limit  (3846 ms)
-PASS  Custom-limit edit during a slowed encode cancels the run; new run uses the new limit  (3957 ms)
-PASS  Resize-option change during a slowed encode cancels the run  (3579 ms)
-PASS  Option changed without an event: finished result is discarded, not published  (983 ms)
-PASS  Start over during processing cancels cleanly  (3609 ms)
-PASS  Leaving mid-run (pagehide) and returning from back/forward cache (pageshow) gives a clean, usable tool  (4245 ms)
-PASS  Wide 12000x60 noisy PNG to 40 KB with resizing: succeeds within limits (finding 4)  (843 ms)
-PASS  Wide 12000x60 noisy PNG to 5 KB: honest "smallest allowed size" message with measured size  (660 ms)
-PASS  Screenshots: mobile compressor before and after a successful result  (1778 ms)
-PASS  Pages: status, unique titles/descriptions, one h1, canonical, internal links resolve  (1035 ms)
-PASS  404: unknown path returns 404 page with noindex and working links  (196 ms)
-PASS  Layout at 360px: no horizontal scroll on any page, touch targets >= 44px  (2318 ms)
-PASS  Layout at 1280px: no horizontal scroll on any page  (2580 ms)
-PASS  Keyboard: skip link first, file picker reachable by Tab with visible focus  (261 ms)
-PASS  Without JavaScript: instructions readable, tool hidden, notice shown  (168 ms)
+PASS  Success: 3000x2000 JPEG to 100 KB, quality only, dimensions unchanged  (1504 ms)
+PASS  Success: 1600x1200 WebP to 50 KB  (971 ms)
+PASS  Success: custom 75 KB limit  (1415 ms)
+PASS  Success: PNG with .jpg extension is detected by content  (597 ms)
+PASS  Success with resize: noisy 2000x1500 PNG to 20 KB, smaller dims, same aspect ratio  (1152 ms)
+PASS  Transparency: notice shown and transparent area becomes white  (822 ms)
+PASS  Metadata: EXIF block in input is not present in output  (1365 ms)
+PASS  Impossible target: 20 KB on noisy PNG without resize gives error, no download  (760 ms)
+PASS  Already-small JPEG: note says it is already under the limit  (233 ms)
+PASS  Rejects random-bytes.jpg with a clear error  (215 ms)
+PASS  Rejects jpeg-garbage.jpg with a clear error  (227 ms)
+PASS  Rejects truncated.jpg with a clear error  (213 ms)
+PASS  Rejects text-renamed.png with a clear error  (225 ms)
+PASS  Rejects huge-dimensions.png with a clear error  (210 ms)
+PASS  Rejects bad-data.png with a clear error  (201 ms)
+PASS  Rejects animation.gif with a clear error  (201 ms)
+PASS  Rejects photo.heic with a clear error  (208 ms)
+PASS  Rejects empty.jpg with a clear error  (240 ms)
+PASS  Rejects oversized.jpg with a clear error  (224 ms)
+PASS  Custom limit validation  (626 ms)
+PASS  Reset clears image, result, download link and releases object URLs  (839 ms)
+PASS  Replacing the image during processing cancels the old run (no stale result or download)  (4908 ms)
+PASS  Choosing a new image after success removes the old download  (904 ms)
+PASS  No image data is transmitted (request log, server log, CSP blocks connections)  (1280 ms)
+PASS  Options are locked while compressing; picker and Start over stay usable  (1445 ms)
+PASS  Preset change during a slowed encode cancels the run; new run uses the new limit  (3901 ms)
+PASS  Custom-limit edit during a slowed encode cancels the run; new run uses the new limit  (4097 ms)
+PASS  Resize-option change during a slowed encode cancels the run  (3846 ms)
+PASS  Option changed without an event: finished result is discarded, not published  (1134 ms)
+PASS  Start over during processing cancels cleanly  (3686 ms)
+PASS  Leaving mid-run (pagehide) and returning from back/forward cache (pageshow) gives a clean, usable tool  (4507 ms)
+PASS  Wide 12000x60 noisy PNG to 40 KB with resizing: succeeds within limits (finding 4)  (837 ms)
+PASS  Wide 12000x60 noisy PNG to 5 KB: honest "smallest allowed size" message with measured size  (581 ms)
+PASS  Screenshots: mobile compressor before and after a successful result  (2472 ms)
+PASS  Resize OFF, detailed 4000x3000 to 200 KB: dimensions kept, low setting explained  (2050 ms)
+PASS  Resize ON, detailed 4000x3000 to 200 KB: smaller dimensions, setting at least 70%, full size at 70% measured too big  (3367 ms)
+PASS  Resize ON, 70% fits at full size: dimensions kept, setting between 70% and 92%  (1181 ms)
+PASS  Resize ON never enlarges: small 300x200 image keeps its size at 92%  (495 ms)
+PASS  Resize ON, thin 12000x60 image to 40 KB: 70%+ unless at the smallest allowed size  (820 ms)
+PASS  Impossible with resize OFF: detailed 4000x3000 to 100 KB gives an accurate error and no download  (977 ms)
+PASS  Resize option switched OFF during a slowed resize-first run cancels it  (3686 ms)
+PASS  Resize ON, 3000x30 strip already at the smallest size: not resized, setting below 70% explained accurately  (713 ms)
+PASS  Preview of an original no larger than 1,600 px is labelled full size, without the scaled-preview note  (994 ms)
+PASS  Previews: original and result shown at the same size with real pixels and bytes (360px)  (1702 ms)
+PASS  Previews: original and result shown at the same size with real pixels and bytes (1280px)  (1661 ms)
+PASS  Pages: status, unique titles/descriptions, one h1, canonical, internal links resolve  (696 ms)
+PASS  404: unknown path returns 404 page with noindex and working links  (146 ms)
+PASS  Layout at 360px: no horizontal scroll on any page, touch targets >= 44px  (2262 ms)
+PASS  Layout at 1280px: no horizontal scroll on any page  (2343 ms)
+PASS  Keyboard: skip link first, file picker reachable by Tab with visible focus  (224 ms)
+PASS  Without JavaScript: instructions readable, tool hidden, notice shown  (131 ms)
 
-40 passed, 0 failed, 40 total
+51 passed, 0 failed, 51 total
 
 Details:
-  jpg100: photo.jpg -> 93398 bytes (limit 102400), 3000x2000
-  webp50: photo.webp -> 47483 bytes (limit 51200), 1600x1200
-  custom75: photo.jpg -> 74696 bytes (limit 76800), 3000x2000
-  pngnamedjpg: png-named-as.jpg -> 20144 bytes (limit 20480), 800x600
-  noise20resize: noisy.png -> 19450 bytes (limit 20480), 362x272
+  jpg100: photo.jpg -> 93398 bytes (limit 102400), 3000x2000, setting 12%
+  webp50: photo.webp -> 47483 bytes (limit 51200), 1600x1200, setting 14%
+  custom75: photo.jpg -> 74696 bytes (limit 76800), 3000x2000, setting 10%
+  pngnamedjpg: png-named-as.jpg -> 20144 bytes (limit 20480), 800x600, setting 19%
+  noise20resize: noisy.png -> 19248 bytes (limit 20480), 418x313, setting 71%
   transparent: 50739 bytes; sampled pixels [[255,255,255,255],[255,255,255,255]]
-  impossible: Could not get this image under 20 KB (20,480 bytes). No file was created.The smallest result was 248.3 KB (254,295 bytes) at 10% quality and the original 2,000 × 1,500 px.Lowering the quality alone wa [encodes: 2]
+  impossible: Could not get this image under 20 KB (20,480 bytes). No file was created.The smallest result was 248.3 KB (254,295 bytes) at an encoder setting of 10% and the original 2,000 × 1,500 px.Lowering the qu [encodes: 2]
   bad:random-bytes.jpg: Unsupported file: random-bytes.jpg.This file is not a JPEG, PNG or WebP image. Renaming a file (for example .pdf to .jpg) does not change its format.
   bad:jpeg-garbage.jpg: jpeg-garbage.jpg could not be read as an image.The file looks damaged, or it is not really the format its name suggests. Try the original photo again.
   bad:truncated.jpg: truncated.jpg could not be read as an image.The JPEG file is incomplete. It may have been cut off while downloading or copying. Try the original photo again.
@@ -432,27 +520,97 @@ Details:
   bad:empty.jpg: empty.jpg is empty (0 bytes). Choose another file.
   bad:oversized.jpg: oversized.jpg is 26,624.0 KB (27,262,976 bytes). The largest file this tool accepts is 25,600.0 KB (25 MB).
   replace: status after replace began with: "Image ready. Choose a size limit, then press Compress."; final download photo-under-50kb.jpg 47483 bytes
-  network: page requests: GET /compress-image-to-kb/, GET /assets/css/style.css, GET /assets/img/favicon.svg, GET /assets/js/compressor.js, GET blob:/a039c0de-bd1d-4559-89ad-4e5d691f6df5, GET blob:/ac3f85f5-4cb7-4e08-ba4f-d945e6837c73; requests during processing: 0 network (2 local blob: preview loads); server saw 4 GETs with empty bodies; fetch() blocked by CSP
+  network: page requests: GET /compress-image-to-kb/, GET /assets/css/style.css, GET /assets/img/favicon.svg, GET /assets/js/compressor.js, GET blob:/0c199188-8908-4653-935e-2c6d0b2b7b8f, GET blob:/678b05fa-6bc4-4dbd-afdf-bb167bff30e9; requests during processing: 0 network (2 local blob: preview loads); server saw 4 GETs with empty bodies; fetch() blocked by CSP
   presetChange: 200 KB run cancelled by switch to 50 KB; new download 47483 bytes
   customChange: 150 KB run cancelled by edit to 60 KB; new download 57907 bytes
-  wide40: wide-noise.png -> 40905 bytes (limit 40960), 6400x32
-  wide5: Could not get this image under 5 KB (5,120 bytes). No file was created.Even at the smallest size this tool allows, 6,400 × 32 px (shortest side 32 px), and 10% quality, the file was 7.10 KB (7,266 bytes). Choose a larger limit. [independent Chromium measurement: 7266 bytes; encodes 6]
+  wide40: wide-noise.png -> 40905 bytes (limit 40960), 6400x32, setting 45%
+  wide5: Could not get this image under 5 KB (5,120 bytes). No file was created.Even at the smallest size this tool allows, 6,400 × 32 px (shortest side 32 px), and an encoder setting of 10%, the file was 7.10 KB (7,266 bytes). Choose a la [independent Chromium measurement: 7266 bytes; encodes 5]
+  detailed200off: detailed.jpg -> 200565 bytes (limit 204800), 4000x3000, setting 15%
+  detailed200on: detailed.jpg -> 196930 bytes (limit 204800), 1836x1377, setting 71%; full size at 70% = 1447846 bytes (over limit); 5% larger (1928x1446) at 70% = 211610 bytes (over limit)
+  webp500on: photo.webp -> 503453 bytes (limit 512000), 1600x1200, setting 79%
+  wide40on: wide-noise.png -> 40905 bytes (limit 40960), 6400x32, setting 45% (at smallest allowed size) | note: "The image was made smaller, to 53% of the original width (same shape), which is the smallest size this tool allows (32 px on the shortest side). Even at that size it did not fit at a setting of 70%, so the setting had to go down to 45%."
+  strip20on: strip-noise.png -> 20142 bytes (limit 20480), 3000x30, setting 23%; full size at 70% = 51397 bytes (over limit)
+  previews360: boxes 260x195 and 260x195 css px; Result: the downloaded JPEG itself, 1,836 × 1,377 px, 192.3 KB (196,930 bytes), setting 71%.
+  previews1280: boxes 405x303 and 405x303 css px; Result: the downloaded JPEG itself, 1,836 × 1,377 px, 192.3 KB (196,930 bytes), setting 71%.
   pages: 7 pages, 7 unique internal links checked; origin https://phototools-test.example.com; owner "Test Owner & Co"; email owner@phototools-test.example.com
 ```
 
-The "Details" lines join paragraphs without spaces because they are read with `textContent`.
+## Stage 2A background (algorithm and evidence, unchanged in 2A.1)
 
-## Existing compressor regressions
+### Investigation and reproduction
 
-All 40 browser tests from Stage 1.1 are unchanged and passed in all four browser runs (2 states × template/configured). They include option locking and cancellation during slowed encodes, the 12000×60 thin-image cases, reset during processing, and the pagehide/pageshow restore. Each successful download was checked for byte count, JPEG signature, frame-header dimensions and a re-decode in Chromium. The compressor JavaScript was not changed in 1.1.1.
+In Stage 1.1.1, "Allow smaller dimensions" only took effect after the 10% encoder setting had failed at full size. So when a setting between 10% and 70% fitted at full size, the tool accepted it and never resized, even with the option on.
 
-## Not tested / could not run
+Reproduction on the unchanged Stage 1.1.1 code, with a detailed 4000×3000 JPEG of text over a textured background (`detailed.jpg`, 4,088,326 bytes) and a 200 KB limit with resizing ON: the result was **4000×3000 at a 15% setting** (200,565 bytes). At 1:1 pixel size it shows ringing around the text and smeared texture (`evidence/evidence-detailed_jpg-200kb.png`, middle column). A 3000×2000 photo-like fixture at 150 KB gave **3000×2000 at 16%** with visible JPEG block texture (`evidence/evidence-photo_jpg-150kb.png`).
 
-- Real Android phones and Android Chrome. Mobile layout was checked only with a 360 × 740 Chromium viewport and touch emulation.
-- Firefox, Safari, Samsung Internet and Edge.
-- A real back/forward-cache navigation (simulated with `PageTransitionEvent`s).
-- The 40-attempt-budget message path (no fixture triggers it without a test-only hook).
-- Node.js 18, and Cloudflare's build image.
-- The real GitHub Actions workflows and Cloudflare Pages build gate.
-- A real 40-megapixel image, real camera photos with EXIF orientation, screen readers, automated accessibility checkers and slow devices.
-- Windows paths. `config.mjs` normalises `\` to `/` for page names, but it was run only on Linux.
+### What changed
+
+**Resizing ON:**
+1. Try full size at 92%.
+2. Then try full size at 70%. If that fits, raise the setting as far as it fits and keep the full size.
+3. Otherwise shrink at 70%, grow back toward the largest size that fits (within 2%), then raise the setting.
+4. Go below 70% only at the smallest allowed size (shortest side 32 px).
+
+The image is never enlarged and the aspect ratio is kept.
+
+**Resizing OFF:** the search is unchanged. The result now explains when the setting is below 70%. The label says "Encoder quality setting", and the text states it is not a measured visual-quality score.
+
+**Result display:** the original and the result are shown at the same on-screen size, with captions giving each one's real pixels and bytes, and the user is asked to inspect faces and text. The original preview is now a lossless PNG of at most 1,600 px; it was 640 px before.
+
+Unchanged: validation, cancellation, stale-result protection, reset, metadata removal, privacy and CSP, configuration tools.
+
+Note: when I started this stage, the working copy contained unfinished, undelivered Stage 2A edits from an earlier interrupted session. I set them aside and rebuilt this stage from the delivered Stage 1.1.1 ZIP, so every change here was made and tested in this session.
+
+### Before/after evidence
+
+Command:
+```
+SITE_DIR=<Stage 1.1.1 site> OUT=/tmp/evidence LABEL=before node tests/quality-evidence.mjs
+SITE_DIR=site               OUT=/tmp/evidence LABEL=after  node tests/quality-evidence.mjs
+```
+
+"screen" = both images scaled to 1000 px wide. "zoom" = both at the original's full pixel size. PSNR and SSIM are luma, against the original. Higher is closer to the original.
+
+Before (Stage 1.1.1):
+```
+before-detailed_jpg-50kb-resize-on: 47610 bytes (limit 51200), 845x634, encoder setting 78%; screen PSNR 29.42 dB SSIM 0.9226; zoom PSNR 23.59 dB SSIM 0.5232
+before-detailed_jpg-100kb-resize-on: 101636 bytes (limit 102400), 1369x1027, encoder setting 70%; screen PSNR 35.26 dB SSIM 0.9490; zoom PSNR 25.71 dB SSIM 0.5468
+before-detailed_jpg-200kb-resize-on: 200565 bytes (limit 204800), 4000x3000, encoder setting 15%; screen PSNR 39.42 dB SSIM 0.9419; zoom PSNR 29.64 dB SSIM 0.5720
+before-detailed_jpg-200kb-resize-off: 200565 bytes (limit 204800), 4000x3000, encoder setting 15%; screen PSNR 39.42 dB SSIM 0.9419; zoom PSNR 29.64 dB SSIM 0.5720
+before-detailed_jpg-100kb-resize-off: NO RESULT: Could not get this image under 100 KB (102,400 bytes). No file was created.The smallest result was 158.9 KB (162,728 bytes) at 10% quality and the original 4,00
+before-photo_jpg-50kb-resize-on: 48634 bytes (limit 51200), 707x471, encoder setting 78%; screen PSNR 35.23 dB SSIM 0.8624; zoom PSNR 26.16 dB SSIM 0.3262
+before-photo_jpg-150kb-resize-on: 148791 bytes (limit 153600), 3000x2000, encoder setting 16%; screen PSNR 37.31 dB SSIM 0.8961; zoom PSNR 26.72 dB SSIM 0.4240
+before-photo_jpg-150kb-resize-off: 148791 bytes (limit 153600), 3000x2000, encoder setting 16%; screen PSNR 37.31 dB SSIM 0.8961; zoom PSNR 26.72 dB SSIM 0.4240
+```
+
+After (Stage 2A):
+```
+after-detailed_jpg-50kb-resize-on: 48980 bytes (limit 51200), 945x708, encoder setting 71%; screen PSNR 30.23 dB SSIM 0.9256; zoom PSNR 23.95 dB SSIM 0.5254
+after-detailed_jpg-100kb-resize-on: 101636 bytes (limit 102400), 1369x1027, encoder setting 70%; screen PSNR 35.26 dB SSIM 0.9490; zoom PSNR 25.71 dB SSIM 0.5468
+after-detailed_jpg-200kb-resize-on: 196930 bytes (limit 204800), 1836x1377, encoder setting 71%; screen PSNR 36.26 dB SSIM 0.9613; zoom PSNR 27.02 dB SSIM 0.5660
+after-detailed_jpg-200kb-resize-off: 200565 bytes (limit 204800), 4000x3000, encoder setting 15%; screen PSNR 39.42 dB SSIM 0.9419; zoom PSNR 29.64 dB SSIM 0.5720
+after-detailed_jpg-100kb-resize-off: NO RESULT: Could not get this image under 100 KB (102,400 bytes). No file was created.The smallest result was 158.9 KB (162,728 bytes) at an encoder setting of 10% and the
+after-photo_jpg-50kb-resize-on: 50088 bytes (limit 51200), 784x523, encoder setting 73%; screen PSNR 35.50 dB SSIM 0.8641; zoom PSNR 26.21 dB SSIM 0.3290
+after-photo_jpg-150kb-resize-on: 151188 bytes (limit 153600), 1406x937, encoder setting 70%; screen PSNR 37.72 dB SSIM 0.9042; zoom PSNR 26.65 dB SSIM 0.3788
+after-photo_jpg-150kb-resize-off: 148791 bytes (limit 153600), 3000x2000, encoder setting 16%; screen PSNR 37.31 dB SSIM 0.8961; zoom PSNR 26.72 dB SSIM 0.4240
+```
+
+What this shows, honestly:
+- **Resizing OFF is unchanged:** the outputs are byte-identical (200,565 and 148,791 bytes), and 100 KB is still impossible with the same smallest result of 162,728 bytes.
+- **Resizing ON, cases that changed (detailed 200 KB, photo 150 KB):**
+  - **At screen size**, the Stage 2A results score higher on SSIM: 0.9613 vs 0.9419 for detailed, 0.9042 vs 0.8961 for the photo.
+  - **PSNR at screen size is mixed:** lower for detailed (36.26 vs 39.42 dB), higher for the photo (37.72 vs 37.31 dB).
+  - **At full zoom**, the Stage 2A results score lower on both measures. In the detailed image the small (18–22 px) text is clearly blurrier, while the Stage 1.1.1 result is sharper but has ringing.
+- **Tradeoff:** Stage 2A trades JPEG blocking for softness. It cannot restore detail that a smaller picture has no pixels for. This is why the page now tells users with text-heavy images to try both settings and compare.
+- **Resizing ON, 50 and 100 KB:** these already resized in Stage 1.1.1. They gave the same or slightly larger dimensions now (945×708 vs 845×634 at 50 KB) because the grow-back step is finer.
+- PSNR and SSIM are simple measures on synthetic images. They are not evidence about the user's photo, and neither proves that text or faces are readable.
+
+The composites in `evidence/` were assembled with Pillow from the screen and zoom images saved by `quality-evidence.mjs`; that step is not part of the ZIP. The mobile screenshots in `screenshots/` show the compressor before and after a successful 200 KB result with resizing on (detailed fixture).
+
+## Not tested / limitations
+
+- **The user's actual photo**, and real camera photos in general. All evidence uses synthetic fixtures.
+- **Real Android phones**, plus Firefox, Safari, Samsung Internet and Edge. Other encoders give different sizes and settings; for example, ChatGPT's native encoder chose about 33% where Chromium chose 45%.
+- **Human readability judgement** beyond my own inspection. PSNR and SSIM are not reading tests.
+- **Full-resolution comparison:** there is no full-resolution original viewer, by design. The original preview is capped at 1,600 px, and the page now says so.
+- The 40-attempt-budget message path, a real back/forward-cache navigation, Node.js 18, Windows paths, the real GitHub workflows and Cloudflare build gate, a real 40-megapixel image, screen readers and automated accessibility checkers.

@@ -1,0 +1,8 @@
+before-detailed_jpg-50kb-resize-on: 47610 bytes (limit 51200), 845x634, encoder setting 78%; screen PSNR 29.42 dB SSIM 0.9226; zoom PSNR 23.59 dB SSIM 0.5232
+before-detailed_jpg-100kb-resize-on: 101636 bytes (limit 102400), 1369x1027, encoder setting 70%; screen PSNR 35.26 dB SSIM 0.9490; zoom PSNR 25.71 dB SSIM 0.5468
+before-detailed_jpg-200kb-resize-on: 200565 bytes (limit 204800), 4000x3000, encoder setting 15%; screen PSNR 39.42 dB SSIM 0.9419; zoom PSNR 29.64 dB SSIM 0.5720
+before-detailed_jpg-200kb-resize-off: 200565 bytes (limit 204800), 4000x3000, encoder setting 15%; screen PSNR 39.42 dB SSIM 0.9419; zoom PSNR 29.64 dB SSIM 0.5720
+before-detailed_jpg-100kb-resize-off: NO RESULT: Could not get this image under 100 KB (102,400 bytes). No file was created.The smallest result was 158.9 KB (162,728 bytes) at 10% quality and the original 4,00
+before-photo_jpg-50kb-resize-on: 48634 bytes (limit 51200), 707x471, encoder setting 78%; screen PSNR 35.23 dB SSIM 0.8624; zoom PSNR 26.16 dB SSIM 0.3262
+before-photo_jpg-150kb-resize-on: 148791 bytes (limit 153600), 3000x2000, encoder setting 16%; screen PSNR 37.31 dB SSIM 0.8961; zoom PSNR 26.72 dB SSIM 0.4240
+before-photo_jpg-150kb-resize-off: 148791 bytes (limit 153600), 3000x2000, encoder setting 16%; screen PSNR 37.31 dB SSIM 0.8961; zoom PSNR 26.72 dB SSIM 0.4240

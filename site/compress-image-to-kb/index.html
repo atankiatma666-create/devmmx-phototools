@@ -85,7 +85,7 @@
       <div class="check">
         <input type="checkbox" id="allow-resize">
         <label for="allow-resize">Allow smaller dimensions
-          <span class="hint">Only used if lowering quality alone cannot reach the limit. The shape is kept. If this is off, the width and height never change.</span>
+          <span class="hint">When on, the tool makes the picture smaller rather than lowering the JPEG encoder setting below 70%, as long as it can still be made smaller. If it reaches the smallest size the tool allows (32 px on the shortest side), the setting can still go below 70%. The shape is kept and the picture is never enlarged. When off, the width and height never change.</span>
         </label>
       </div>
     </div>
@@ -106,18 +106,24 @@
         <div class="meter-row"><span class="meter-label">Result</span><span class="meter-track"><span class="meter-fill is-ok" id="meter-res"></span><span class="meter-limit" id="meter-limit-b"></span></span></div>
         <p class="meter-legend">The dark line marks your limit.</p>
       </div>
-      <div class="compare">
-        <dl class="facts">
-          <dt>New size</dt><dd id="res-size"></dd>
-          <dt>Limit</dt><dd id="res-target"></dd>
-          <dt>Dimensions</dt><dd id="res-dims"></dd>
-          <dt>JPEG quality</dt><dd id="res-quality"></dd>
-        </dl>
-        <figure class="preview">
-          <img id="res-preview" alt="">
-          <figcaption>Result</figcaption>
+      <dl class="facts">
+        <dt>New size</dt><dd id="res-size"></dd>
+        <dt>Limit</dt><dd id="res-target"></dd>
+        <dt>Dimensions</dt><dd id="res-dims"></dd>
+        <dt>Encoder quality setting</dt><dd id="res-quality"></dd>
+      </dl>
+      <div class="side-by-side">
+        <figure class="cmp">
+          <div class="cmp-frame"><img id="cmp-orig" alt=""></div>
+          <figcaption id="cmp-orig-cap"></figcaption>
+        </figure>
+        <figure class="cmp">
+          <div class="cmp-frame"><img id="res-preview" alt=""></div>
+          <figcaption id="cmp-res-cap"></figcaption>
         </figure>
       </div>
+      <p class="small">Both pictures are shown at the same size on screen, so a smaller result is stretched to match. Zoom in on faces and text in both before you upload. Only you can judge whether they are clear enough.</p>
+      <p class="note small" id="cmp-preview-note" hidden>The original is shown as a scaled preview of at most 1,600 px, to save phone memory. Zooming far into it cannot show all of your original's detail. For the final check, open your original file and the downloaded JPEG in your gallery or file viewer and zoom in on faces and text there.</p>
       <p class="small" id="res-note"></p>
       <p><a class="button" id="download">Download JPEG</a></p>
     </section>
@@ -142,8 +148,11 @@
 <p>The result will be at or below your limit, often a few KB below. The tool does not add empty data to make a file exactly 50 KB. Padding a file only makes it bigger without improving the picture. If a form also has a minimum size, check that the result is above it.</p>
 
 <h2>Quality and what you give up</h2>
-<p>JPEG makes files smaller by throwing away detail that is hard to see. A little of that is invisible. A lot of it causes blocky squares, smeared skin and fuzzy text. The tool starts at high quality (92%) and only goes lower when it has to. The result shows the quality it used.</p>
-<p>Very small limits on large, detailed photos can be impossible with quality alone. Then you have two honest choices: allow smaller dimensions, or choose a larger limit. A smaller image at decent quality usually looks better than a full-size image at very low quality.</p>
+<p>JPEG makes files smaller by throwing away detail that is hard to see. A little of that is invisible. A lot of it causes blocky squares, smeared skin and fuzzy text. The tool tries the highest encoder setting it uses (92%) first and only goes lower when it has to. The result shows the setting it used.</p>
+<p>The setting, such as 70%, is the number given to the JPEG encoder. It is not a measurement of how clear the picture is, and it does not promise that text or faces stay readable. The same setting can look fine on one photo and poor on another.</p>
+<p>With <strong>Allow smaller dimensions</strong> off, the width and height stay the same and only the setting is lowered, as far as 10% if needed. With it on, the tool makes the picture smaller instead of going below a 70% setting. That works for most photos, but not always: if even the smallest size the tool allows (32 px on the shortest side) does not fit at 70%, the setting goes lower. The result always says which happened.</p>
+<p>Neither choice is always better. A smaller picture avoids blocky squares, but it has fewer pixels, so it looks softer when you zoom in, and small text can become unreadable. A full-size picture at a low setting keeps more pixels but can look blocky. For a photo of a document with small writing, try both and compare. The result shows the original and the new file side by side at the same size, with their real pixels and bytes. The original is a scaled preview of at most 1,600 px, so for the final check open your original file and the downloaded JPEG in your gallery or file viewer and zoom in on faces and text.</p>
+<p>Very small limits on large, detailed photos can be impossible with the dimensions kept. Then you can allow smaller dimensions, or choose a larger limit if the form allows it.</p>
 <p>Photos with fine texture, like grass, gravel or low-light noise, need more bytes than plain backgrounds. Cropping away what you do not need gives the tool fewer pixels to store, so it can keep higher quality.</p>
 
 <h2>Transparent images</h2>

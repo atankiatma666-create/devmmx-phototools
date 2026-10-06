@@ -160,12 +160,18 @@ async function expectSuccess(name, fixture, kb, { resize = false, sameDims = tru
       assert(dec.width < ow && dec.height < oh, 'expected smaller dimensions');
       assert(Math.abs(dec.width / dec.height - ow / oh) < 0.01, 'aspect ratio not preserved');
     }
+    assert(dec.width <= ow && dec.height <= oh, `output larger than original: ${dec.width}x${dec.height}`);
     const shown = await page.$eval('#res-size', (e) => e.textContent);
+    const setting = Number((await page.textContent('#res-quality')).replace('%', ''));
+    const note = await page.textContent('#res-note');
+    // Never claim the 70% setting was kept when it was not
+    if (setting < 70) assert(!note.includes('To keep the setting at 70% or higher'), `note claims 70%+ at ${setting}%: ${note}`);
+    else assert(!note.includes('had to go down to'), `note claims a drop below 70% at ${setting}%: ${note}`);
     assert(shown.includes(buf.length.toLocaleString('en-US') + ' bytes'), `UI size "${shown}" does not match file ${buf.length}`);
     // blob: URLs are in-memory previews inside the tab, not network traffic
     const bad = requests.filter((r) => r.method !== 'GET' || r.post || !(r.url.startsWith(BASE) || r.url.startsWith('blob:' + BASE)));
     assert(bad.length === 0, 'unexpected network requests: ' + JSON.stringify(bad));
-    return { page, buf, dec, orig: [ow, oh], detail: `${fixture} -> ${buf.length} bytes (limit ${limit}), ${dec.width}x${dec.height}` };
+    return { page, buf, dec, setting, note, orig: [ow, oh], detail: `${fixture} -> ${buf.length} bytes (limit ${limit}), ${dec.width}x${dec.height}, setting ${setting}%` };
   } finally { await ctx.close(); }
 }
 
@@ -311,6 +317,8 @@ await test('Replacing the image during processing cancels the old run (no stale 
   assert(st.name === 'photo.webp' && st.result && st.err && st.href === null, 'stale state after replace: ' + JSON.stringify(st));
   assert(st.status.startsWith('Image ready'), 'status overwritten by old run: ' + st.status);
   await page.evaluate(() => { window.__slow = 0; });
+  // Resizing off so the output must be exactly 1600 px wide: proof it came from the new image
+  await page.uncheck('#allow-resize');
   await setTarget(page, 50); await compress(page);
   const { buf, name } = await download(page, 'replace');
   assert(name.startsWith('photo-under-50kb'), 'download from wrong image: ' + name);
@@ -533,7 +541,7 @@ await test('Screenshots: mobile compressor before and after a successful result'
   const page = await ctx.newPage();
   await page.addInitScript(INSTRUMENT);
   await page.goto(BASE + '/compress-image-to-kb/');
-  await choose(page, 'photo.jpg'); await setTarget(page, 100);
+  await choose(page, 'detailed.jpg'); await setTarget(page, 200); await page.check('#allow-resize');
   await page.locator('section.tool').screenshot({ path: join(OUT, 'screens', 'compressor-mobile-before.png') });
   await compress(page);
   await page.locator('section.tool').screenshot({ path: join(OUT, 'screens', 'compressor-mobile-after.png') });
@@ -541,6 +549,141 @@ await test('Screenshots: mobile compressor before and after a successful result'
   assert(sw[0] <= sw[1], 'horizontal scroll at 360px');
   await ctx.close();
 });
+
+// ---------- Stage 2A: resize-first when "Allow smaller dimensions" is on ----------
+// Measures, in Chromium, the size of a JPEG of the given fixture at w x h and quality q (same drawing as the tool).
+async function measure(fixture, w, h, q) {
+  return decoderPage.evaluate(async ({ b64, w, h, q }) => {
+    const bm = await createImageBitmap(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))]));
+    const c = new OffscreenCanvas(w, h); const x = c.getContext('2d', { alpha: false });
+    x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.drawImage(bm, 0, 0, w, h);
+    return (await c.convertToBlob({ type: 'image/jpeg', quality: q })).size;
+  }, { b64: readFileSync(join(FIX, fixture)).toString('base64'), w, h, q });
+}
+
+await test('Resize OFF, detailed 4000x3000 to 200 KB: dimensions kept, low setting explained', async () => {
+  const r = await expectSuccess('detailed200off', 'detailed.jpg', 200);
+  assert(r.setting < 70, 'expected a low setting for this case, got ' + r.setting);
+  assert(r.note.includes('below 70%') && r.note.includes('Allow smaller dimensions') && r.note.includes('not a measurement'), 'low-setting explanation missing: ' + r.note);
+  assert(r.note.includes('usually lets the tool keep') && r.note.includes('That is not always possible'), 'resize-off recommendation promises a universal 70% floor: ' + r.note);
+  assert(!r.note.includes('made smaller'), 'resize note shown with resizing off');
+  details.detailed200off = r.detail;
+});
+
+await test('Resize ON, detailed 4000x3000 to 200 KB: smaller dimensions, setting at least 70%, full size at 70% measured too big', async () => {
+  const r = await expectSuccess('detailed200on', 'detailed.jpg', 200, { resize: true, sameDims: false });
+  assert(r.setting >= 70, 'setting below 70%: ' + r.setting);
+  assert(r.note.includes('To keep the setting at 70% or higher, the image was made smaller') && r.note.includes('not a measurement'), 'resize explanation missing: ' + r.note);
+  const full70 = await measure('detailed.jpg', 4000, 3000, 0.70);
+  assert(full70 > 200 * 1024, 'full size at 70% would have fitted (' + full70 + ' bytes), so shrinking was not needed');
+  const w2 = Math.round(r.dec.width * 1.05), h2 = Math.round(r.dec.height * 1.05);
+  const bigger = await measure('detailed.jpg', w2, h2, 0.70);
+  details.detailed200on = `${r.detail}; full size at 70% = ${full70} bytes (over limit); 5% larger (${w2}x${h2}) at 70% = ${bigger} bytes (${bigger > 200 * 1024 ? 'over' : 'under'} limit)`;
+});
+
+await test('Resize ON, 70% fits at full size: dimensions kept, setting between 70% and 92%', async () => {
+  const r = await expectSuccess('webp500on', 'photo.webp', 500, { resize: true });
+  assert(r.setting >= 70 && r.setting <= 92, 'setting ' + r.setting);
+  assert(!r.note.includes('made smaller'), 'resize note shown although dimensions were kept');
+  details.webp500on = r.detail;
+});
+
+await test('Resize ON never enlarges: small 300x200 image keeps its size at 92%', async () => {
+  const r = await expectSuccess('smallon', 'small.jpg', 20, { resize: true });
+  assert(r.setting === 92, 'setting ' + r.setting);
+});
+
+await test('Resize ON, thin 12000x60 image to 40 KB: 70%+ unless at the smallest allowed size', async () => {
+  const r = await expectSuccess('wide40on', 'wide-noise.png', 40, { resize: true, sameDims: false });
+  const atMin = Math.min(r.dec.width, r.dec.height) === 32;
+  assert(atMin || r.setting >= 70, `setting ${r.setting}% below 70% without being at the smallest size`);
+  if (r.setting < 70) {
+    assert(atMin, 'setting below 70% without reaching the smallest size');
+    assert(r.note.includes('The image was made smaller') && r.note.includes('smallest size this tool allows') &&
+      r.note.includes(`had to go down to ${r.setting}%`), 'min-size explanation inaccurate: ' + r.note);
+  }
+  const m = r.note.match(/The image was made smaller.*?had to go down to \d+%\./);
+  details.wide40on = r.detail + (atMin ? ' (at smallest allowed size)' : '') + (m ? ` | note: "${m[0]}"` : '');
+});
+
+await test('Impossible with resize OFF: detailed 4000x3000 to 100 KB gives an accurate error and no download', async () => {
+  const ctx = await browser.newContext();
+  const { page } = await openTool(ctx);
+  await choose(page, 'detailed.jpg'); await setTarget(page, 100); await compress(page);
+  const e = await errText(page);
+  assert(e.includes('Could not get this image under 100 KB') && e.includes('encoder setting of 10%') && e.includes('Allow smaller dimensions'), 'message: ' + e);
+  assert(!(await visible(page, '#result')) && (await page.$eval('#download', (a) => a.getAttribute('href'))) === null, 'download offered');
+  await ctx.close();
+});
+
+await test('Resize option switched OFF during a slowed resize-first run cancels it', async () => {
+  const ctx = await browser.newContext();
+  const { page } = await openTool(ctx);
+  await choose(page, 'detailed.jpg'); await setTarget(page, 200); await page.check('#allow-resize');
+  await startSlow(page);
+  await forceChange(page, 'resize', false);
+  await expectStopped(page, 'resize-off');
+  await ctx.close();
+});
+
+await test('Resize ON, 3000x30 strip already at the smallest size: not resized, setting below 70% explained accurately', async () => {
+  const r = await expectSuccess('strip20on', 'strip-noise.png', 20, { resize: true });
+  const full70 = await measure('strip-noise.png', 3000, 30, 0.70);
+  assert(full70 > 20 * 1024, 'full size at 70% fits (' + full70 + '), case not exercised');
+  assert(r.setting < 70, 'expected a setting below 70%, got ' + r.setting);
+  assert(r.note.includes('already at the smallest size this tool allows') && r.note.includes('could not be made smaller') &&
+    r.note.includes(`had to go down to ${r.setting}%`), 'explanation inaccurate: ' + r.note);
+  assert(!r.note.includes('The image was made smaller'), 'claims resizing that did not happen');
+  details.strip20on = `${r.detail}; full size at 70% = ${full70} bytes (over limit)`;
+});
+
+await test('Preview of an original no larger than 1,600 px is labelled full size, without the scaled-preview note', async () => {
+  const ctx = await browser.newContext();
+  const { page } = await openTool(ctx);
+  await choose(page, 'photo.webp'); await setTarget(page, 200); await compress(page);
+  await page.waitForFunction(() => ['cmp-orig', 'res-preview'].every((id) => { const i = document.getElementById(id); return i.complete && i.naturalWidth > 0; }));
+  const cap = await page.textContent('#cmp-orig-cap');
+  assert(cap.includes('(preview at full size)') && !cap.includes('scaled preview'), 'caption: ' + cap);
+  assert(!(await visible(page, '#cmp-preview-note')), 'scaled-preview note shown for a full-size preview');
+  assert((await page.$eval('#cmp-orig', (i) => i.naturalWidth)) === 1600, 'preview not at full size');
+  await ctx.close();
+});
+
+for (const [w, h] of [[360, 740], [1280, 800]]) {
+  await test(`Previews: original and result shown at the same size with real pixels and bytes (${w}px)`, async () => {
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, acceptDownloads: true });
+    const { page } = await openTool(ctx);
+    await choose(page, 'detailed.jpg'); await setTarget(page, 200); await page.check('#allow-resize'); await compress(page);
+    // Wait until both images have finished loading and decoded successfully, then measure
+    await page.waitForFunction(() => ['cmp-orig', 'res-preview'].every((id) => { const i = document.getElementById(id); return i.complete && i.naturalWidth > 0; }), null, { timeout: 30000 });
+    const info = await page.evaluate(() => {
+      const box = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; };
+      return {
+        o: box('cmp-orig'), r: box('res-preview'),
+        oc: document.getElementById('cmp-orig-cap').textContent, rc: document.getElementById('cmp-res-cap').textContent,
+        oLoaded: document.getElementById('cmp-orig').naturalWidth, rLoaded: document.getElementById('res-preview').naturalWidth
+      };
+    });
+    assert(info.oLoaded === 1600, 'original preview did not load at 1600 px: ' + info.oLoaded);
+    assert(info.rLoaded > 0, 'result preview did not load');
+    assert(Math.abs(info.o[0] - info.r[0]) <= 1 && Math.abs(info.o[1] - info.r[1]) <= 1, 'preview boxes differ: ' + JSON.stringify(info));
+    assert(info.o[0] > 100, 'previews too small: ' + info.o);
+    assert(Math.abs(info.o[0] / info.o[1] - 4 / 3) < 0.02, 'preview box not in original aspect ratio: ' + info.o);
+    const { buf } = await download(page, `preview-${w}`);
+    const d = jpegInfo(buf);
+    assert(info.oc.includes('scaled preview') && info.oc.includes('1,600 × 1,200 px') && info.oc.includes('4,000 × 3,000 px') && info.oc.includes('4,088,326 bytes'), 'original caption: ' + info.oc);
+    assert(info.rLoaded === d.width, `result preview is not the downloaded JPEG (${info.rLoaded} vs ${d.width})`);
+    assert(info.rc.includes('the downloaded JPEG itself'), 'result caption: ' + info.rc);
+    const noteVisible = await visible(page, '#cmp-preview-note');
+    const noteText = await page.textContent('#cmp-preview-note');
+    assert(noteVisible && noteText.includes('at most 1,600 px') && noteText.includes('cannot show all') && noteText.includes('downloaded JPEG'), 'preview limitation note: ' + noteVisible + ' ' + noteText);
+    assert(info.rc.includes(`${d.width.toLocaleString('en-US')} × ${d.height.toLocaleString('en-US')} px`) && info.rc.includes(buf.length.toLocaleString('en-US') + ' bytes'), 'result caption: ' + info.rc);
+    const sw = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+    assert(sw[0] <= sw[1], 'horizontal scroll');
+    details['previews' + w] = `boxes ${info.o.join('x')} and ${info.r.join('x')} css px; ${info.rc}`;
+    await ctx.close();
+  });
+}
 
 const PAGES = ['/', '/compress-image-to-kb/', '/guides/reduce-photo-size-android/', '/guides/image-dimensions-vs-file-size/', '/about/', '/contact/', '/privacy/'];
 

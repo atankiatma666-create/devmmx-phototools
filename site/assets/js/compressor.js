@@ -15,12 +15,12 @@
   var MAX_TARGET_KB = 20480;               // 20 MB
   var Q_MAX = 0.92;                        // best quality we try
   var Q_MIN = 0.10;                        // lowest quality we accept
-  var Q_RESIZE = 0.70;                     // quality aimed for when shrinking dimensions
+  var Q_RESIZE = 0.70;                     // with resizing allowed: lowest encoder setting used before dimensions shrink
   var QUALITY_STEPS = 8;                   // binary-search steps per size
   var MAX_ENCODES = 40;                    // hard cap on JPEG encodes per run
   var MAX_RESIZE_ROUNDS = 6;
   var MIN_SIDE = 32;                       // never shrink below this (shortest side)
-  var PREVIEW_SIDE = 640;                  // original preview size
+  var PREVIEW_SIDE = 1600;                 // original preview size (large enough for a fair on-screen comparison)
 
   var $ = function (id) { return document.getElementById(id); };
   var el = {
@@ -50,6 +50,10 @@
     resQuality: $('res-quality'),
     resNote: $('res-note'),
     resPreview: $('res-preview'),
+    cmpOrig: $('cmp-orig'),
+    cmpOrigCap: $('cmp-orig-cap'),
+    cmpResCap: $('cmp-res-cap'),
+    cmpPreviewNote: $('cmp-preview-note'),
     download: $('download'),
     meterOrig: $('meter-orig'),
     meterRes: $('meter-res'),
@@ -67,6 +71,7 @@
   var srcFile = null;
   var srcInfo = null;
   var originalPreviewUrl = null;
+  var previewW = 0, previewH = 0;     // pixel size of the original preview (at most PREVIEW_SIDE)
   var resultUrl = null;
 
   function Cancelled() {}
@@ -118,6 +123,7 @@
     el.download.removeAttribute('href');
     el.download.removeAttribute('download');
     el.resPreview.removeAttribute('src');
+    el.cmpOrig.removeAttribute('src');
     el.result.hidden = true;
   }
 
@@ -125,6 +131,7 @@
     if (src) { try { src.close(); } catch (e) { /* ignore */ } }
     src = null; srcFile = null; srcInfo = null;
     if (originalPreviewUrl) { URL.revokeObjectURL(originalPreviewUrl); originalPreviewUrl = null; }
+    previewW = previewH = 0;
     el.origPreview.removeAttribute('src');
     el.original.hidden = true;
     el.alphaNote.hidden = true;
@@ -292,9 +299,10 @@
       var data = ctx.getImageData(0, 0, c.width, c.height).data;
       for (var i = 3; i < data.length; i += 4) { if (data[i] < 255) { hasAlpha = true; break; } }
     } catch (e) { /* ignore */ }
+    var pw = c.width, ph = c.height;
     return toBlob(c, 'image/png').then(function (blob) {
       c.width = c.height = 0;
-      return { blob: blob, hasAlpha: hasAlpha };
+      return { blob: blob, hasAlpha: hasAlpha, width: pw, height: ph };
     });
   }
 
@@ -369,6 +377,7 @@
     el.origDims.textContent = fmtDims(decoded.width, decoded.height);
     el.origType.textContent = info.type.toUpperCase();
     originalPreviewUrl = URL.createObjectURL(prev.blob);
+    previewW = prev.width; previewH = prev.height;
     el.origPreview.src = originalPreviewUrl;
     el.origPreview.alt = 'Preview of ' + file.name;
     el.alphaNote.hidden = !prev.hasAlpha;
@@ -400,7 +409,7 @@
     compress(id, source, t.bytes, allowResize).then(function (out) {
       if (id !== jobSeq) return;
       if (optionsKey() !== opts) { stopForChangedOptions(); return; }   // never publish for old options
-      if (out.ok) showResult(file, source, t, out); else showImpossible(file, source, t, out);
+      if (out.ok) showResult(file, source, t, out, allowResize); else showImpossible(file, source, t, out);
     }).catch(function (err) {
       if (err instanceof Cancelled || id !== jobSeq) return;
       showError('<p>' + esc(err && err.userMessage ? err.userMessage : 'Compression failed. Your phone may be low on memory. Close other tabs and try again, or use a smaller image.') + '</p>');
@@ -487,7 +496,7 @@
 
     // Grow back toward the last scale that was too big, keeping the largest that fits.
     function growBack(fit, sFit, sFail, steps) {
-      if (steps <= 0 || sFail / sFit < 1.04 || encodes >= MAX_ENCODES) return Promise.resolve({ fit: fit, s: sFit });
+      if (steps <= 0 || sFail / sFit < 1.02 || encodes >= MAX_ENCODES) return Promise.resolve({ fit: fit, s: sFit });
       var mid = Math.sqrt(sFit * sFail);
       var d = dimsAt(mid);
       render(d[0], d[1]);
@@ -501,9 +510,9 @@
 
     // A scale that fits at Q_RESIZE was found: enlarge as far as possible, then raise quality.
     function finishFit(r, sFit, sFail) {
-      return growBack(r, sFit, sFail, 3).then(function (g) {
+      return growBack(r, sFit, sFail, 5).then(function (g) {
         if (curW !== g.fit.w || curH !== g.fit.h) render(g.fit.w, g.fit.h);   // canvas must match the kept size
-        return refine(g.fit, Q_RESIZE, Q_MAX, 3);
+        return refine(g.fit, Q_RESIZE, Q_MAX, 4);
       }).then(function (best) { return { ok: true, best: best }; });
     }
 
@@ -542,19 +551,34 @@
       });
     }
 
-    return qualityOnly().then(function (res) {
-      if (res.ok) return res;
-      if (!allowResize) return { ok: false, reason: 'quality' };
-      // Already at or below the smallest allowed size: the lowest-quality attempt was the last option.
-      if (sMin >= 1) return { ok: false, reason: 'minSize', atOriginal: true, minW: source.width, minH: source.height, minBytes: smallest.blob.size };
-      // Measure at the resize quality on full size to estimate the scale.
+    // "Allow smaller dimensions" ON: keep the encoder setting at Q_RESIZE (70%) or higher and make the
+    // image smaller instead. Go below 70% only at the smallest allowed size. Never enlarge.
+    function resizeFirst() {
       render(source.width, source.height);
-      return encode(Q_RESIZE).then(function (r) {
-        if (!r) return BUDGET;
-        note(r);
-        return shrink(0, 1, r.blob.size);
+      return encode(Q_MAX).then(function (top) {
+        note(top);
+        if (top.blob.size <= target) return { ok: true, best: top };
+        return encode(Q_RESIZE).then(function (r) {
+          if (!r) return BUDGET;
+          note(r);
+          // Fits at full size with 70% or more: no need to shrink, just raise the setting as far as it fits.
+          if (r.blob.size <= target) return refine(r, Q_RESIZE, Q_MAX, 5).then(function (best) { return { ok: true, best: best }; });
+          if (sMin >= 1) {
+            // Too small to shrink (shortest side already 32 px or less): only a lower setting is left.
+            return encode(Q_MIN).then(function (low) {
+              if (!low) return BUDGET;
+              note(low);
+              if (low.blob.size > target) return { ok: false, reason: 'minSize', atOriginal: true, minW: source.width, minH: source.height, minBytes: low.blob.size };
+              return refine(low, Q_MIN, Q_RESIZE, QUALITY_STEPS).then(function (best) { return { ok: true, best: best }; });
+            });
+          }
+          return shrink(0, 1, r.blob.size);
+        });
       });
-    }).then(function (res) {
+    }
+
+    var run = allowResize ? resizeFirst() : qualityOnly().then(function (res) { return res.ok ? res : { ok: false, reason: 'quality' }; });
+    return run.then(function (res) {
       res.encodes = encodes;
       res.smallest = smallest;
       // Final safety check: never report success for a file over the limit.
@@ -579,24 +603,58 @@
     el.meterLimitA.style.left = el.meterLimitB.style.left = 'calc(' + ((target / scale) * 100).toFixed(2) + '% - 1px)';
   }
 
-  function showResult(file, source, t, out) {
+  function showResult(file, source, t, out, allowResize) {
     var b = out.best;
+    var pct = Math.round(b.q * 100);
+    var floor = Math.round(Q_RESIZE * 100);
     resultUrl = URL.createObjectURL(b.blob);
     el.resultHeading.textContent = 'Done: ' + fmtKB(b.blob.size) + ', under your ' + t.kb + ' KB limit';
     el.resSize.textContent = fmtSize(b.blob.size);
     el.resTarget.textContent = t.kb + ' KB (' + fmtBytes(t.bytes) + ')';
     var resized = b.w !== source.width || b.h !== source.height;
     el.resDims.textContent = fmtDims(b.w, b.h) + (resized ? ' (reduced from ' + fmtDims(source.width, source.height) + ')' : ' (unchanged)');
-    el.resQuality.textContent = Math.round(b.q * 100) + '%';
-    var notes = [];
-    if (resized) notes.push('Quality changes alone could not reach the limit, so the dimensions were reduced. The shape (aspect ratio) is the same.');
-    if (b.q < 0.4) notes.push('The JPEG quality is low, so expect blocky or blurry areas. Zoom in and check faces and text before you upload. If the form allows it, a larger limit will look better.');
-    else if (b.q < 0.7) notes.push('Some fine detail is lost at this quality. Zoom in to check that faces and text are still clear.');
+    el.resQuality.textContent = pct + '%';
+
+    var notes = ['The encoder quality setting (' + pct + '%) is the number given to the JPEG encoder. It is not a measurement of how clear the result looks.'];
+    var belowFloor = b.q < Q_RESIZE - 1e-9;
+    var widthPct = Math.round(100 * b.w / source.width);
+    var softer = 'Small text and fine detail can become hard to read when an image is made smaller.';
+    var lowLoss = 'Expect visible loss of detail. A larger limit will look better, if the form allows it.';
+    if (resized && !belowFloor) {
+      notes.push('To keep the setting at ' + floor + '% or higher, the image was made smaller: ' + widthPct + '% of the original width, same shape. ' + softer);
+    } else if (resized && belowFloor) {
+      // Shrunk all the way to the smallest allowed size and it still did not fit at the 70% setting.
+      notes.push('The image was made smaller, to ' + widthPct + '% of the original width (same shape), which is the smallest size this tool allows (' +
+        MIN_SIDE + ' px on the shortest side). Even at that size it did not fit at a setting of ' + floor + '%, so the setting had to go down to ' + pct + '%. ' + softer + ' ' + lowLoss);
+    } else if (belowFloor && allowResize) {
+      // Allowed to resize, but already at or below the smallest allowed size, so it could not be made smaller.
+      notes.push('This image is already at the smallest size this tool allows (' + MIN_SIDE + ' px or less on the shortest side), so it could not be made smaller, and the setting had to go down to ' +
+        pct + '% to fit. ' + lowLoss);
+    } else if (belowFloor) {
+      notes.push('The setting is below ' + floor + '%. Low settings remove fine detail and often cause blocky areas and smeared text' +
+        (b.q < 0.4 ? ', and at ' + pct + '% that is likely to be visible' : '') + '. Turning on Allow smaller dimensions usually lets the tool keep the setting at ' +
+        floor + '% or higher by making the image smaller instead, if your form accepts smaller dimensions. That is not always possible: if the image would have to go below the smallest size the tool allows (' +
+        MIN_SIDE + ' px on the shortest side), the setting can still end up below ' + floor + '%.');
+    }
     if (srcInfo && srcInfo.type === 'jpeg' && file.size <= t.bytes && b.blob.size > file.size) notes.push('Your original was already smaller than this result. You can upload the original instead.');
     notes.push('The file is not padded to an exact size. It is simply at or below the limit you chose.');
     el.resNote.textContent = notes.join(' ');
+
+    // Side-by-side comparison at the same displayed size
+    var ratio = source.width + ' / ' + source.height;
+    el.cmpOrig.parentNode.style.aspectRatio = ratio;
+    el.resPreview.parentNode.style.aspectRatio = ratio;
+    el.cmpOrig.src = originalPreviewUrl;
+    el.cmpOrig.alt = 'Original ' + file.name;
+    var scaledPreview = previewW < source.width || previewH < source.height;
+    el.cmpOrigCap.textContent = scaledPreview
+      ? 'Original, scaled preview: shown from a ' + fmtDims(previewW, previewH) + ' copy. Your file is ' + fmtDims(source.width, source.height) + ', ' + fmtSize(file.size) + '.'
+      : 'Original: ' + fmtDims(source.width, source.height) + ', ' + fmtSize(file.size) + ' (preview at full size).';
+    el.cmpPreviewNote.hidden = !scaledPreview;
     el.resPreview.src = resultUrl;
     el.resPreview.alt = 'Compressed version of ' + file.name;
+    el.cmpResCap.textContent = 'Result: the downloaded JPEG itself, ' + fmtDims(b.w, b.h) + ', ' + fmtSize(b.blob.size) + ', setting ' + pct + '%.';
+
     el.download.href = resultUrl;
     el.download.download = outputName(file.name, t.kb);
     el.download.hidden = false;
@@ -610,16 +668,16 @@
     var s = out.smallest;
     var msg = '<p><strong>Could not get this image under ' + t.kb + ' KB (' + fmtBytes(t.bytes) + ').</strong> No file was created.</p>';
     if (out.reason === 'quality') {
-      if (s) msg += '<p>The smallest result was ' + fmtSize(s.blob.size) + ' at ' + Math.round(s.q * 100) + '% quality and the original ' + fmtDims(s.w, s.h) + '.</p>';
+      if (s) msg += '<p>The smallest result was ' + fmtSize(s.blob.size) + ' at an encoder setting of ' + Math.round(s.q * 100) + '% and the original ' + fmtDims(s.w, s.h) + '.</p>';
       msg += '<p>Lowering the quality alone was not enough. Turn on <em>Allow smaller dimensions</em> and try again, or choose a larger limit.</p>';
     } else if (out.reason === 'minSize') {
       msg += out.atOriginal
-        ? '<p>This image is already at the smallest size this tool allows (shortest side ' + MIN_SIDE + ' px or less), and at ' + Math.round(Q_MIN * 100) +
-          '% quality it was ' + fmtSize(out.minBytes) + '. Choose a larger limit.</p>'
-        : '<p>Even at the smallest size this tool allows, ' + fmtDims(out.minW, out.minH) + ' (shortest side ' + MIN_SIDE + ' px), and ' + Math.round(Q_MIN * 100) +
-          '% quality, the file was ' + fmtSize(out.minBytes) + '. Choose a larger limit.</p>';
+        ? '<p>This image is already at the smallest size this tool allows (shortest side ' + MIN_SIDE + ' px or less), and at an encoder setting of ' + Math.round(Q_MIN * 100) +
+          '% it was ' + fmtSize(out.minBytes) + '. Choose a larger limit.</p>'
+        : '<p>Even at the smallest size this tool allows, ' + fmtDims(out.minW, out.minH) + ' (shortest side ' + MIN_SIDE + ' px), and an encoder setting of ' + Math.round(Q_MIN * 100) +
+          '%, the file was ' + fmtSize(out.minBytes) + '. Choose a larger limit.</p>';
     } else {
-      if (s) msg += '<p>The smallest result found was ' + fmtSize(s.blob.size) + ' at ' + Math.round(s.q * 100) + '% quality and ' + fmtDims(s.w, s.h) + '.</p>';
+      if (s) msg += '<p>The smallest result found was ' + fmtSize(s.blob.size) + ' at an encoder setting of ' + Math.round(s.q * 100) + '% and ' + fmtDims(s.w, s.h) + '.</p>';
       msg += '<p>The tool stopped after its limit of ' + MAX_ENCODES + ' attempts without finding a version under the limit. ' +
         'This does not prove it is impossible. Try a slightly larger limit, or crop the photo first so there is less to store.</p>';
     }

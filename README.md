@@ -1,4 +1,4 @@
-# devMmX PhotoTools — Stage 1.1 (with fixes 1.1.1)
+# devMmX PhotoTools — Stage 2A (with review corrections 2A.1)
 
 A small static website with one tool: **Compress Image to a Target KB**.
 Images are processed in the visitor's browser. Nothing is uploaded.
@@ -23,11 +23,13 @@ tools/config.mjs              Sets your domain, name and email; checks the site 
 tests/generate-fixtures.mjs   Makes the test images
 tests/config-tests.mjs        Configuration tests (Node.js only)
 tests/run-tests.mjs           Browser tests (Playwright + Chromium)
+tests/quality-evidence.mjs    Before/after compression evidence (see Tests)
 tests/run-all.mjs             Runs everything: config tests + browser tests on a template copy and a configured copy
 .github/workflows/            Optional helpers that run on GitHub (see below)
 site.config.example.json      Example of the saved settings file
 TEST-RESULTS.md               What was tested and what happened
 screenshots/                  Mobile compressor before and after a result (from the test run)
+evidence/                     Stage 2A before/after comparison images and measurements
 ```
 
 ## Your details (configuration)
@@ -154,31 +156,54 @@ Results: `tests/results/config-report.txt`, `tests/results/template/report.txt` 
 
 Without a computer: copy `.github/workflows/tests.yml` into GitHub the same way as Part 1 step 2, then run **Run tests** from the Actions tab. The reports are attached to the run as `test-results`.
 
+Before/after compression evidence (optional, separate from the test pipeline):
+
+```
+SITE_DIR=site OUT=tests/results/evidence LABEL=after node tests/quality-evidence.mjs
+SITE_DIR=<an older version's site folder> OUT=tests/results/evidence LABEL=before node tests/quality-evidence.mjs
+```
+
+It runs fixed scenarios through the real compressor UI and saves each download. For each one it writes bytes, pixels, encoder setting, and PSNR/SSIM against the original at screen size (1000 px wide) and at the original's full pixel size. It also saves a "screen" and a "zoom" image. The composite pictures in `evidence/` were assembled from those images.
+
 See `TEST-RESULTS.md` for the results of the runs made while building this version.
 
 ## How the compressor works
 
 1. Checks the file size (max 25 MB). Reads the file header to detect the real format and dimensions before decoding: JPEG, PNG or WebP, judged by content, not by the file name. Refuses images over 40 megapixels or 12,000 px on a side. Detects incomplete JPEG, PNG and WebP files.
-2. Decodes the image with the browser and makes a small preview, which is also used to detect transparency.
-3. Draws the image on a white canvas, so transparent pixels become white, and encodes JPEG at 92% quality. If that fits, it stops.
-4. Otherwise it encodes at 10%. If that fits, it binary-searches between 10% and 92% for the highest quality that fits.
-5. If 10% is still too big and you allowed smaller dimensions, it shrinks the image and keeps the aspect ratio. The shortest side never goes below 32 px.
-   - It aims for about 70% quality, estimating each new size from the last measured size.
+2. Decodes the image with the browser and makes a preview (lossless PNG, up to 1,600 px), which is also used to detect transparency.
+3. Draws the image on a white canvas, so transparent pixels become white, and encodes JPEG at an encoder setting of 92%. If that fits, it stops.
+
+"Encoder setting" (the `quality` value passed to `canvas.toBlob`) is not a measured visual-quality score.
+
+4. **Allow smaller dimensions OFF** (unchanged since Stage 1): it encodes at 10%. If that fits, it binary-searches between 10% and 92% for the highest setting that fits. Width and height never change.
+5. **Allow smaller dimensions ON** (changed in Stage 2A): it shrinks the image instead of going below a 70% setting, as long as the image can still be made smaller. This is not a universal floor: at the smallest allowed size the setting can still go lower, and the result says so. The aspect ratio is kept, the image is never enlarged, and the shortest side never goes below 32 px.
+   - It tries full size at 70%. If that fits, it raises the setting as far as it fits and keeps the full size.
+   - Otherwise it shrinks at 70%, estimating each new size from the last measured size.
    - If an estimate falls below the smallest allowed size, it measures the smallest allowed size itself instead of giving up: first at 70%, then at 10%.
-   - When something fits, it grows back toward the largest size that still fits, then raises the quality where possible.
-   - If even the smallest allowed size at 70% is too big but 10% fits, it keeps the smallest size and finds the highest quality that fits there. The result shows a low-quality warning.
+   - When something fits, it grows back toward the largest size that still fits at 70% (stopping when the gap is under 2%), then raises the setting where possible.
+   - Only if the smallest allowed size does not fit at 70% does it go below 70%, finding the highest setting that fits there. The result explains this.
+   - Before Stage 2A, a full-size result at a setting as low as 10% was accepted even with this option on. That caused the badly degraded results users reported.
 6. Never more than 40 encodes per run. There are three honest outcomes when nothing fits:
    - "Lowering the quality alone was not enough" (resizing was off).
    - "Even at the smallest size this tool allows … the file was N bytes". This is a measured result.
    - "Stopped after its limit of 40 attempts … This does not prove it is impossible".
 7. The final size is the real `Blob.size`. A result over the limit is never shown as success, and no download is offered.
 8. While compressing, the size choices, custom limit and resize option are locked. Choosing another photo and **Start over** still work and cancel the run. If an option changes anyway (for example by a browser extension), the run is cancelled. A finished result is also discarded if the options no longer match the ones it was made for.
-9. Leaving the page cancels any run and frees memory. If the browser restores the page from its back/forward cache, the tool comes back empty and fully usable.
+9. The result shows the original and the new file side by side at the same on-screen size, with each one's real pixels and bytes, and asks the user to check faces and text. The result notes describe what actually happened in four cases:
+   - kept at 70% or higher by shrinking;
+   - shrunk to the smallest allowed size and still below 70%;
+   - too small to shrink, so below 70%;
+   - resizing off and below 70%.
+
+   The original side is labelled as a scaled preview when the original is larger than 1,600 px. A visible note then says deep zoom cannot show all original detail, and tells the user to check the original file and the downloaded JPEG in their gallery or file viewer.
+10. Leaving the page cancels any run and frees memory. If the browser restores the page from its back/forward cache, the tool comes back empty and fully usable.
 
 ## Known limitations
 
 - Tested only in Chromium 141 (headless, Linux) at 360 px and 1280 px widths. Not tested on a real Android phone, Firefox, Safari or Samsung Internet.
-- When resizing, the search prefers a smaller image at about 70% quality over a larger image at very low quality. The size it picks is the best it found within the attempt limit, not a proven optimum.
+- With resizing on, the tool prefers a smaller image at a 70%+ setting over a full-size image at a low setting. That is a policy, not a proven improvement. In our synthetic tests the smaller result scored better on SSIM when viewed whole at screen size. But it was softer when zoomed to the original's pixel size, and small text was clearly blurrier (see `evidence/` and TEST-RESULTS.md). Users with text-heavy images may get a better result with resizing off.
+- The size picked when resizing is the best found within the attempt limit, not a proven optimum.
+- The original preview is a lossless PNG of at most 1,600 px, not the original file itself, so zooming far into the original preview shows less detail than the real original.
 - Limits: 25 MB, 40 megapixels, 12,000 px longest side. Photos from 50+ megapixel camera modes are refused.
 - Output is always JPEG. Metadata (EXIF, GPS) is not kept. Animated images become one frame.
 - HEIC, AVIF, GIF and BMP are not accepted.
