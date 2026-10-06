@@ -1,0 +1,16 @@
+{
+  "name": "devmmx-phototools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fixtures": "node tests/generate-fixtures.mjs",
+    "test": "node tests/generate-fixtures.mjs && node tests/run-all.mjs",
+    "test:config": "node tests/config-tests.mjs",
+    "test:browser": "node tests/run-tests.mjs",
+    "config:status": "node tools/config.mjs status",
+    "prepublish-check": "node tools/config.mjs prepublish"
+  },
+  "devDependencies": {
+    "playwright": "1.56.0"
+  }
+}

@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'none'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<title>Compress Image to 20, 50, 100 or 200 KB (or Any Limit) | devMmX PhotoTools</title>
+<meta name="description" content="Reduce a JPEG, PNG or WebP image to a maximum size in KB. Shows exact bytes before and after. Runs in your browser; nothing is uploaded.">
+<link rel="canonical" href="https://YOUR-DOMAIN.example/compress-image-to-kb/" data-config="canonical">
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/style.css">
+<meta name="theme-color" content="#ffffff">
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+<header class="site-header">
+  <div class="wrap wrap--wide">
+    <a class="brand" href="/"><img src="/assets/img/favicon.svg" alt="" width="28" height="28">devMmX PhotoTools</a>
+    <nav class="nav" aria-label="Main">
+      <ul>
+        <li><a href="/compress-image-to-kb/" aria-current="page">Compress to KB</a></li>
+        <li><a href="/#guides">Guides</a></li>
+        <li><a href="/about/">About</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+<main id="main">
+  <div class="wrap wrap--wide">
+<h1>Compress an image to a target size in KB</h1>
+<p class="lead">Choose a photo and a size limit. The tool saves a JPEG that is at or under that limit, using the highest quality that fits. Nothing is uploaded.</p>
+
+<section class="tool" aria-labelledby="tool-heading">
+  <h2 id="tool-heading">Compressor</h2>
+  <noscript>
+    <p class="note">The compressor needs JavaScript, because the image is processed by your own browser. Turn JavaScript on for this site to use it. The instructions below still apply.</p>
+  </noscript>
+  <div id="tool" hidden>
+    <div class="step">
+      <p class="step-title" id="pick-title">1. Choose a photo</p>
+      <input class="file-input visually-hidden" type="file" id="file-input" accept="image/jpeg,image/png,image/webp" aria-describedby="file-help">
+      <label class="file-pick" for="file-input">Choose a photo (JPEG, PNG or WebP)</label>
+      <p class="small" id="file-help">Up to 25 MB and 40 megapixels. The photo stays on your device.</p>
+    </div>
+
+    <div class="panel" id="original" hidden>
+      <h3>Your image</h3>
+      <div class="compare">
+        <dl class="facts">
+          <dt>File</dt><dd id="orig-name"></dd>
+          <dt>Size</dt><dd id="orig-size"></dd>
+          <dt>Dimensions</dt><dd id="orig-dims"></dd>
+          <dt>Format</dt><dd id="orig-type"></dd>
+        </dl>
+        <figure class="preview">
+          <img id="orig-preview" alt="">
+          <figcaption>Original (preview is scaled down)</figcaption>
+        </figure>
+      </div>
+      <p class="small" id="orig-note"></p>
+      <p class="note" id="alpha-note" hidden>This image has transparent areas. JPEG cannot store transparency, so those areas will become white in the result.</p>
+    </div>
+
+    <div class="step">
+      <fieldset>
+        <legend>2. Choose a maximum size</legend>
+        <div class="choices">
+          <label class="choice"><input type="radio" name="target" value="20"><span>20 KB</span></label>
+          <label class="choice"><input type="radio" name="target" value="50" checked><span>50 KB</span></label>
+          <label class="choice"><input type="radio" name="target" value="100"><span>100 KB</span></label>
+          <label class="choice"><input type="radio" name="target" value="200"><span>200 KB</span></label>
+          <label class="choice"><input type="radio" name="target" value="custom"><span>Custom</span></label>
+        </div>
+        <div class="custom-row">
+          <label for="custom-kb">Custom limit in KB (5 to 20,480)</label>
+          <input type="text" id="custom-kb" inputmode="numeric" pattern="[0-9]*" autocomplete="off" disabled aria-describedby="custom-bytes">
+          <p class="small" id="custom-bytes" aria-live="polite"></p>
+        </div>
+        <p class="small">1 KB = 1,024 bytes. If a form counts 1 KB as 1,000 bytes, choose a slightly lower limit. See the notes below.</p>
+      </fieldset>
+    </div>
+
+    <div class="step">
+      <p class="step-title">3. Options</p>
+      <div class="check">
+        <input type="checkbox" id="allow-resize">
+        <label for="allow-resize">Allow smaller dimensions
+          <span class="hint">Only used if lowering quality alone cannot reach the limit. The shape is kept. If this is off, the width and height never change.</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="button" type="button" id="compress-btn" disabled>Compress</button>
+      <button class="button button--quiet" type="button" id="reset-btn">Start over</button>
+    </div>
+
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <progress id="progress" hidden aria-label="Compression attempts"></progress>
+    <div class="error" id="error" role="alert" hidden></div>
+
+    <section class="panel result-ok" id="result" hidden aria-labelledby="result-heading">
+      <h3 id="result-heading" tabindex="-1">Result</h3>
+      <div class="meter" aria-hidden="true">
+        <div class="meter-row"><span class="meter-label">Original</span><span class="meter-track"><span class="meter-fill" id="meter-orig"></span><span class="meter-limit" id="meter-limit-a"></span></span></div>
+        <div class="meter-row"><span class="meter-label">Result</span><span class="meter-track"><span class="meter-fill is-ok" id="meter-res"></span><span class="meter-limit" id="meter-limit-b"></span></span></div>
+        <p class="meter-legend">The dark line marks your limit.</p>
+      </div>
+      <div class="compare">
+        <dl class="facts">
+          <dt>New size</dt><dd id="res-size"></dd>
+          <dt>Limit</dt><dd id="res-target"></dd>
+          <dt>Dimensions</dt><dd id="res-dims"></dd>
+          <dt>JPEG quality</dt><dd id="res-quality"></dd>
+        </dl>
+        <figure class="preview">
+          <img id="res-preview" alt="">
+          <figcaption>Result</figcaption>
+        </figure>
+      </div>
+      <p class="small" id="res-note"></p>
+      <p><a class="button" id="download">Download JPEG</a></p>
+    </section>
+  </div>
+</section>
+
+<div class="prose">
+<h2>How to use it</h2>
+<ol>
+  <li>Tap <strong>Choose a photo</strong> and pick the image from your gallery or files.</li>
+  <li>Check the file name, size and dimensions shown, so you know you picked the right photo.</li>
+  <li>Pick a limit, or choose <strong>Custom</strong> and type a number.</li>
+  <li>Press <strong>Compress</strong>. The tool tries different quality settings and keeps the best one that fits.</li>
+  <li>Look at the preview, then tap <strong>Download JPEG</strong>. On Android Chrome the file usually goes to your Downloads folder.</li>
+</ol>
+
+<h2>What “KB” means here</h2>
+<p>This tool uses 1 KB = 1,024 bytes. So 50 KB means at most 51,200 bytes, and 100 KB means at most 102,400 bytes.</p>
+<p>Some websites count 1 KB as 1,000 bytes instead. A file of 50,900 bytes is under 50 KB by the first rule but over it by the second. If you are not sure which rule a form uses, choose a custom limit a little lower. For a 50 KB form limit, 48 KB (49,152 bytes) is under both.</p>
+
+<h2>A maximum, not an exact size</h2>
+<p>The result will be at or below your limit, often a few KB below. The tool does not add empty data to make a file exactly 50 KB. Padding a file only makes it bigger without improving the picture. If a form also has a minimum size, check that the result is above it.</p>
+
+<h2>Quality and what you give up</h2>
+<p>JPEG makes files smaller by throwing away detail that is hard to see. A little of that is invisible. A lot of it causes blocky squares, smeared skin and fuzzy text. The tool starts at high quality (92%) and only goes lower when it has to. The result shows the quality it used.</p>
+<p>Very small limits on large, detailed photos can be impossible with quality alone. Then you have two honest choices: allow smaller dimensions, or choose a larger limit. A smaller image at decent quality usually looks better than a full-size image at very low quality.</p>
+<p>Photos with fine texture, like grass, gravel or low-light noise, need more bytes than plain backgrounds. Cropping away what you do not need gives the tool fewer pixels to store, so it can keep higher quality.</p>
+
+<h2>Transparent images</h2>
+<p>PNG and WebP images can have see-through areas, such as a signature on a transparent background. JPEG cannot store transparency. The tool fills those areas with white, and tells you when your image has any.</p>
+
+<h2>Limits and known issues</h2>
+<ul>
+  <li>Input: JPEG, PNG or WebP only, up to 25 MB, 40 megapixels and 12,000 px on the longest side. Larger images can crash a phone browser, so they are refused with a message.</li>
+  <li>Output: always JPEG. If a form needs PNG, this tool is not the right one.</li>
+  <li>Photo details stored inside the file, such as camera model, date and location, are not copied into the new JPEG.</li>
+  <li>The tool tries at most 40 compressions per run, so it always finishes.</li>
+  <li>Animated WebP images are saved as a single still frame.</li>
+  <li>It was tested in Chromium on a computer, at phone and desktop widths. It was not tested on every phone or browser.</li>
+</ul>
+<p>For help choosing sizes, read <a href="/guides/image-dimensions-vs-file-size/">image dimensions versus file size</a> or <a href="/guides/reduce-photo-size-android/">how to reduce photo size on Android</a>.</p>
+</div>
+  </div>
+</main>
+<footer class="site-footer">
+  <div class="wrap wrap--wide">
+    <ul>
+      <li><a href="/compress-image-to-kb/">Compress image to KB</a></li>
+      <li><a href="/guides/reduce-photo-size-android/">Reduce photo size on Android</a></li>
+      <li><a href="/guides/image-dimensions-vs-file-size/">Dimensions vs file size</a></li>
+      <li><a href="/about/">About</a></li>
+      <li><a href="/contact/">Contact</a></li>
+      <li><a href="/privacy/">Privacy</a></li>
+    </ul>
+    <p>Images are processed in your browser and are not uploaded. Not affiliated with any government, exam or passport authority.</p>
+  </div>
+</footer>
+<script src="/assets/js/compressor.js"></script>
+</body>
+</html>

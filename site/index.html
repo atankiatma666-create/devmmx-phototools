@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'none'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<title>Compress a Photo to a KB Limit, in Your Browser | devMmX PhotoTools</title>
+<meta name="description" content="Free browser tool that re-saves a JPEG, PNG or WebP photo as a JPEG at or under a size you choose, such as 50 KB. Photos stay on your device.">
+<link rel="canonical" href="https://YOUR-DOMAIN.example/" data-config="canonical">
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/style.css">
+<meta name="theme-color" content="#ffffff">
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/img/favicon.svg" alt="" width="28" height="28">devMmX PhotoTools</a>
+    <nav class="nav" aria-label="Main">
+      <ul>
+        <li><a href="/compress-image-to-kb/">Compress to KB</a></li>
+        <li><a href="/#guides">Guides</a></li>
+        <li><a href="/about/">About</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+<main id="main">
+  <div class="wrap">
+<h1>Shrink a photo to fit an upload limit</h1>
+<p class="lead">Online forms often say things like “photo must be under 50 KB”. devMmX PhotoTools has one tool for that job. It re-saves your image as a JPEG that is at or below the size you choose.</p>
+<p><a class="button" href="/compress-image-to-kb/">Open the compressor</a></p>
+<p>The work happens inside your browser. Your photo is not uploaded to this website or to anyone else.</p>
+
+<h2>What the compressor does</h2>
+<ul>
+  <li>Accepts one JPEG, PNG or WebP image, up to 25 MB and 40 megapixels.</li>
+  <li>Lets you pick 20, 50, 100 or 200 KB, or type your own limit. Here, 1 KB means 1,024 bytes.</li>
+  <li>Lowers the JPEG quality step by step until the file fits, keeping the highest quality that still fits.</li>
+  <li>Reduces the width and height only if you allow it, and always keeps the same shape.</li>
+  <li>Shows the exact byte size, dimensions and a preview before and after, then lets you download the JPEG.</li>
+</ul>
+
+<h2>What it does not do</h2>
+<ul>
+  <li>It does not crop. If a form needs a particular shape, crop with your phone’s photo editor first.</li>
+  <li>It does not make files an exact size. It targets a maximum, so a 50 KB limit might give you 46 KB.</li>
+  <li>It does not know the rules of any particular form, exam or office. Always read the official instructions.</li>
+  <li>It does not open HEIC photos, GIFs or PDFs.</li>
+</ul>
+
+<h2 id="guides">Guides</h2>
+<ul class="link-list">
+  <li>
+    <a href="/guides/reduce-photo-size-android/">How to reduce photo file size on an Android phone</a>
+    <p>Check a photo’s size, crop it, compress it in Chrome, and avoid the mistakes that make photos look worse than they need to.</p>
+  </li>
+  <li>
+    <a href="/guides/image-dimensions-vs-file-size/">Image dimensions versus file size: why online forms reject photos</a>
+    <p>Why a 600 × 600 photo can be 40 KB or 400 KB, what DPI really changes, and why “50 KB” can mean two different numbers.</p>
+  </li>
+</ul>
+
+<h2>How your photo is handled</h2>
+<p>When you choose a photo, your browser reads it from your device, draws it, and saves a new JPEG in memory. The page is set up so it is not allowed to send data anywhere. Like any website, the hosting service still records normal requests for the pages themselves. The <a href="/privacy/">privacy page</a> explains this in detail.</p>
+  </div>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <ul>
+      <li><a href="/compress-image-to-kb/">Compress image to KB</a></li>
+      <li><a href="/guides/reduce-photo-size-android/">Reduce photo size on Android</a></li>
+      <li><a href="/guides/image-dimensions-vs-file-size/">Dimensions vs file size</a></li>
+      <li><a href="/about/">About</a></li>
+      <li><a href="/contact/">Contact</a></li>
+      <li><a href="/privacy/">Privacy</a></li>
+    </ul>
+    <p>Images are processed in your browser and are not uploaded. Not affiliated with any government, exam or passport authority.</p>
+  </div>
+</footer>
+</body>
+</html>

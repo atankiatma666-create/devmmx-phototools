@@ -1,0 +1,7 @@
+# Cloudflare Pages response headers. The page-level Content-Security-Policy
+# lives in each HTML file's <meta> tag (see README, "Security policy").
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()

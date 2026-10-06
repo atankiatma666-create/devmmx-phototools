@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'none'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<title>Image Dimensions vs File Size: Why Online Forms Reject Photos | devMmX PhotoTools</title>
+<meta name="description" content="Pixels and kilobytes are different limits. Learn how dimensions, detail, JPEG quality and the 1,000 vs 1,024 KB question affect photo uploads.">
+<link rel="canonical" href="https://YOUR-DOMAIN.example/guides/image-dimensions-vs-file-size/" data-config="canonical">
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/style.css">
+<meta name="theme-color" content="#ffffff">
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/img/favicon.svg" alt="" width="28" height="28">devMmX PhotoTools</a>
+    <nav class="nav" aria-label="Main">
+      <ul>
+        <li><a href="/compress-image-to-kb/">Compress to KB</a></li>
+        <li><a href="/#guides">Guides</a></li>
+        <li><a href="/about/">About</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+<main id="main">
+  <div class="wrap">
+<article>
+<h1>Image dimensions versus file size: why online forms reject photos</h1>
+<p class="lead">Forms often set two limits that sound alike but measure different things: dimensions in pixels and file size in kilobytes. Knowing the difference saves a lot of failed uploads.</p>
+
+<h2>Two different measurements</h2>
+<p><strong>Dimensions</strong> are how many pixels wide and tall an image is, such as 600 × 600. A pixel is one dot of colour.</p>
+<p><strong>File size</strong> is how much storage the file takes, measured in bytes. 1 KB is 1,024 bytes in this site’s tool, and 1 MB is 1,024 KB.</p>
+<p>The two are related, but one does not decide the other.</p>
+
+<h2>How many pixels is that?</h2>
+<p>Multiply width by height. A 4000 × 3000 phone photo has 12,000,000 pixels, often called 12 megapixels. A 600 × 600 photo has 360,000 pixels, which is 3% of that.</p>
+<p>Doubling both width and height gives four times the pixels. 1200 × 1200 has 1,440,000 pixels, four times as many as 600 × 600. File size tends to grow with the pixel count, though not exactly in step.</p>
+
+<h2>Why the same dimensions can give very different file sizes</h2>
+<p>Stored plainly, each pixel needs 3 bytes (red, green and blue). A 600 × 600 image would need 1,080,000 bytes, about 1,055 KB. JPEG stores far less by discarding detail that eyes notice least. How much it can discard depends on the picture:</p>
+<ul>
+  <li><strong>Detail.</strong> A face against a plain wall compresses well. Leaves, gravel, patterned clothes and printed text need more bytes.</li>
+  <li><strong>Noise.</strong> Photos taken in dim light have speckled grain. To JPEG, grain looks like detail, so it costs bytes.</li>
+  <li><strong>Quality setting.</strong> Lower JPEG quality gives smaller files and more visible blocks and blur.</li>
+</ul>
+<p>So two 600 × 600 photos might be 40 KB and 400 KB. That is why this site’s compressor measures each result instead of guessing.</p>
+
+<h2>What DPI does and does not change</h2>
+<p>DPI (or PPI) is a number stored in the file that says how large to print it. Changing it from 72 to 300 does not add or remove pixels, and it does not meaningfully change the file size.</p>
+<p>DPI matters when a form gives a printed size. If a form asks for a photo of 3.5 cm × 4.5 cm at 300 DPI, convert to pixels: centimetres ÷ 2.54 × DPI. That gives about 413 × 531 pixels. These numbers are only an example of the arithmetic. Use the sizes your form actually states.</p>
+
+<h2>Why forms reject photos</h2>
+<ul>
+  <li><strong>Over the size limit.</strong> The most common reason. Compress to the stated maximum.</li>
+  <li><strong>Under a minimum size.</strong> Some forms also reject files that are too small, to avoid unreadable photos. A tool that aims for a maximum may go below it, so check.</li>
+  <li><strong>Wrong dimensions.</strong> The image is too wide, too narrow, or not within a stated pixel range.</li>
+  <li><strong>Wrong shape.</strong> The form wants square or portrait, and the photo is landscape.</li>
+  <li><strong>Wrong format.</strong> The form accepts JPEG only and the file is PNG, WebP or HEIC.</li>
+  <li><strong>Different KB rules.</strong> Some systems count 1 KB as 1,000 bytes, others as 1,024. A file of 50,900 bytes passes a 50 KB limit under the 1,024 rule (51,200 bytes) but fails under the 1,000 rule (50,000 bytes). Aim a little below the limit to be safe, such as 48 KB for a 50 KB limit.</li>
+</ul>
+
+<h2>A sensible order of work</h2>
+<ol>
+  <li>Read the form’s official instructions for format, size, dimensions and shape.</li>
+  <li>Crop to the required shape in your photo editor.</li>
+  <li>If exact pixel dimensions are required, resize to them in an editor that lets you type the numbers.</li>
+  <li>Compress to the size limit with the <a href="/compress-image-to-kb/">compressor</a>, with smaller dimensions turned off so your chosen dimensions stay the same.</li>
+  <li>Check the final file’s details and look at it zoomed in before uploading.</li>
+</ol>
+<p class="note">This site is not connected with any government office, exam board or passport authority. Requirements change, so always follow the current official instructions for your form.</p>
+<p>On a phone? See <a href="/guides/reduce-photo-size-android/">how to reduce photo file size on Android</a>.</p>
+</article>
+  </div>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <ul>
+      <li><a href="/compress-image-to-kb/">Compress image to KB</a></li>
+      <li><a href="/guides/reduce-photo-size-android/">Reduce photo size on Android</a></li>
+      <li><a href="/guides/image-dimensions-vs-file-size/">Dimensions vs file size</a></li>
+      <li><a href="/about/">About</a></li>
+      <li><a href="/contact/">Contact</a></li>
+      <li><a href="/privacy/">Privacy</a></li>
+    </ul>
+    <p>Images are processed in your browser and are not uploaded. Not affiliated with any government, exam or passport authority.</p>
+  </div>
+</footer>
+</body>
+</html>
